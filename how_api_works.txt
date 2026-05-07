@@ -1,0 +1,508 @@
+How the Full Stack Works — Using Reviews as the Example
+The order you build things: Database → PHP API → HTML → JavaScript.
+The order data flows at runtime: Browser → JavaScript → PHP API → Database → back up.
+
+STEP 1 — The Database (the foundation)
+Everything starts here. You define a table that stores the data.
+
+File: soukfreshy.sql — lines 122–135
+
+
+-- Each user can review each product once (UNIQUE KEY enforces this)
+-- The CHECK constraint rejects any rating outside 1–5 at the DB level
+CREATE TABLE IF NOT EXISTS product_reviews (
+  id         INT UNSIGNED     NOT NULL AUTO_INCREMENT,   -- unique row ID
+  product_id INT UNSIGNED     NOT NULL,                  -- which product
+  user_id    INT UNSIGNED     NOT NULL,                  -- who wrote it
+  rating     TINYINT UNSIGNED NOT NULL,                  -- 1 to 5 stars
+  comment    TEXT             DEFAULT NULL,              -- optional text
+  created_at TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_review_user_product (user_id, product_id), -- one review per user per product
+  CONSTRAINT fk_reviews_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  CONSTRAINT fk_reviews_user    FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
+  CONSTRAINT chk_rating         CHECK (rating BETWEEN 1 AND 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+Why this matters: The UNIQUE KEY on (user_id, product_id) means the database itself will reject a second review. This lets PHP do a simple INSERT ... ON DUPLICATE KEY UPDATE instead of checking first, then inserting.
+
+STEP 2 — The DB Connection Helper
+File: api/config/db.php
+
+
+<?php
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'soukfreshy');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+
+// static $pdo = null means the connection is created once
+// and reused for every call within the same request
+function getDB(): PDO {
+    static $pdo = null;
+    if ($pdo === null) {
+        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+        $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,  // throw exceptions on error
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,        // rows as associative arrays
+            PDO::ATTR_EMULATE_PREPARES   => false,                   // real prepared statements
+        ]);
+    }
+    return $pdo;
+}
+Every API file calls require_once on this file and then calls getDB() to get the connection.
+
+STEP 3 — The PHP API Endpoints
+There are three endpoints for reviews. Each is a standalone PHP file that:
+
+Checks the session (is the user logged in?)
+Reads input (from URL query string or from the JSON request body)
+Validates the input
+Runs a SQL query
+Returns a JSON response
+GET — Read reviews
+File: api/reviews/get.php
+
+
+<?php
+session_start();                                      // resume the PHP session
+header('Content-Type: application/json; charset=utf-8'); // tell browser: this is JSON
+
+// Read product_id from the URL: ?product_id=5
+// Cast to int immediately — this blocks SQL injection via the parameter
+$productId = isset($_GET['product_id']) ? (int) $_GET['product_id'] : 0;
+
+if ($productId <= 0) {
+    http_response_code(400);                          // 400 = Bad Request
+    echo json_encode(['success' => false, 'message' => 'Produit invalide.']);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/config/db.php';     // load the getDB() helper
+                                                      // dirname(__DIR__) = the api/ folder
+
+try {
+    $db  = getDB();
+    $uid = !empty($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0;
+
+    // If the user is logged in, exclude their own review from the list
+    // (it's shown separately at the top of the section)
+    if ($uid > 0) {
+        $stmt = $db->prepare(
+            'SELECT r.id, r.rating, r.comment, r.created_at, u.full_name
+             FROM product_reviews r
+             JOIN users u ON u.id = r.user_id
+             WHERE r.product_id = :pid AND r.user_id != :uid
+             ORDER BY r.created_at DESC
+             LIMIT 50'
+        );
+        $stmt->execute([':pid' => $productId, ':uid' => $uid]);
+    } else {
+        // Guest — just fetch all reviews
+        $stmt = $db->prepare('...');
+        $stmt->execute([':pid' => $productId]);
+    }
+
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$row) {
+        // PHP fetches everything as strings; cast to proper types
+        $row['id']     = (int) $row['id'];
+        $row['rating'] = (int) $row['rating'];
+    }
+
+    // Also fetch this user's own review separately
+    $userReview = null;
+    if ($uid > 0) {
+        $stmt2 = $db->prepare('SELECT id, rating, comment FROM product_reviews WHERE product_id = :pid AND user_id = :uid');
+        $stmt2->execute([':pid' => $productId, ':uid' => $uid]);
+        $own = $stmt2->fetch();
+        if ($own) {
+            $userReview = ['id' => (int)$own['id'], 'rating' => (int)$own['rating'], 'comment' => $own['comment']];
+        }
+    }
+
+    // Output the JSON — this is what JavaScript will receive
+    echo json_encode(['success' => true, 'reviews' => $rows, 'user_review' => $userReview]);
+
+} catch (PDOException $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Erreur serveur.']);
+}
+POST — Submit a review
+File: api/reviews/submit.php
+
+
+<?php
+session_start();
+header('Content-Type: application/json; charset=utf-8');
+
+// Gate: only logged-in users can write reviews
+if (empty($_SESSION['user_id'])) {
+    http_response_code(401);  // 401 = Unauthorized
+    echo json_encode(['success' => false, 'message' => 'Non connecté.']);
+    exit;
+}
+
+// Gate: this endpoint only accepts POST, not GET
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);  // 405 = Method Not Allowed
+    echo json_encode(['success' => false, 'message' => 'Méthode non autorisée.']);
+    exit;
+}
+
+// JavaScript sends a JSON body (not a form). php://input reads the raw body.
+// json_decode turns it into a PHP array.
+$body      = json_decode(file_get_contents('php://input'), true);
+$productId = isset($body['product_id']) ? (int) $body['product_id']       : 0;
+$rating    = isset($body['rating'])     ? (int) $body['rating']           : 0;
+$comment   = isset($body['comment'])    ? trim((string) $body['comment']) : '';
+
+// Validate — reject anything malformed before touching the DB
+if ($productId <= 0 || $rating < 1 || $rating > 5) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Données invalides.']);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/config/db.php';
+
+try {
+    $db  = getDB();
+    $uid = (int) $_SESSION['user_id'];
+
+    // INSERT ... ON DUPLICATE KEY UPDATE:
+    // - If this user has never reviewed this product → INSERT a new row
+    // - If they already have one → UPDATE rating+comment in place
+    // This works because of the UNIQUE KEY (user_id, product_id) in the table
+    $stmt = $db->prepare(
+        'INSERT INTO product_reviews (product_id, user_id, rating, comment)
+         VALUES (:pid, :uid, :rating, :comment)
+         ON DUPLICATE KEY UPDATE rating = :rating2, comment = :comment2, created_at = CURRENT_TIMESTAMP'
+    );
+    $stmt->execute([
+        ':pid'      => $productId,
+        ':uid'      => $uid,
+        ':rating'   => $rating,
+        ':comment'  => $comment !== '' ? $comment : null,
+        ':rating2'  => $rating,
+        ':comment2' => $comment !== '' ? $comment : null,
+    ]);
+
+    // Recalculate the product's aggregate rating and review count
+    $db->prepare(
+        'UPDATE products
+         SET review_count = (SELECT COUNT(*) FROM product_reviews WHERE product_id = :pid),
+             rating = COALESCE((SELECT ROUND(AVG(rating), 1) FROM product_reviews WHERE product_id = :pid2), 0)
+         WHERE id = :pid3'
+    )->execute([':pid' => $productId, ':pid2' => $productId, ':pid3' => $productId]);
+
+    // Return the updated stats so JavaScript can refresh the display without a full page reload
+    $stats = $db->prepare('SELECT rating, review_count AS reviews FROM products WHERE id = :pid');
+    $stats->execute([':pid' => $productId]);
+    $row = $stats->fetch();
+
+    echo json_encode(['success' => true, 'rating' => (float)$row['rating'], 'reviews' => (int)$row['reviews']]);
+
+} catch (PDOException $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Erreur serveur.']);
+}
+POST — Delete a review
+File: api/reviews/delete.php
+
+
+<?php
+session_start();
+header('Content-Type: application/json; charset=utf-8');
+
+// Same guards as submit
+if (empty($_SESSION['user_id'])) { http_response_code(401); ... exit; }
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); ... exit; }
+
+$body      = json_decode(file_get_contents('php://input'), true);
+$productId = isset($body['product_id']) ? (int) $body['product_id'] : 0;
+
+try {
+    $db  = getDB();
+    $uid = (int) $_SESSION['user_id'];
+
+    // The WHERE includes user_id so a user can only delete their OWN review
+    // No admin check needed — the DB constraint handles ownership
+    $stmt = $db->prepare('DELETE FROM product_reviews WHERE product_id = :pid AND user_id = :uid');
+    $stmt->execute([':pid' => $productId, ':uid' => $uid]);
+
+    // Same aggregate recalculation as submit.php
+    // ... then return updated stats
+} catch (PDOException $e) { ... }
+STEP 4 — The HTML (the container)
+This project is a SPA — there is no separate HTML file per page. The product page HTML is built dynamically inside JavaScript as a template string. The key piece is just one placeholder div:
+
+File: user/script.js — line 453
+
+
+<!-- Reviews section — starts with a spinner, gets replaced by loadReviews() -->
+<p class="pd-label">Avis clients</p>
+<div id="reviews-section">
+  <div style="text-align:center; padding:24px 0;">
+    <i class="fas fa-spinner fa-spin" style="color:#d1d5db; font-size:18px;"></i>
+  </div>
+</div>
+This div with id="reviews-section" is just an empty container. JavaScript will inject the real content into it.
+
+STEP 5 — The JavaScript (the bridge between HTML and API)
+File: user/script.js
+
+There are four functions that handle the entire reviews UI:
+
+loadReviews(productId) — fetches data from the API
+
+// Called immediately after the product page is rendered (line 462)
+async function loadReviews(productId) {
+  const section = $('reviews-section'); // $ is a shortcut for document.getElementById
+  if (!section) return;
+  try {
+    // GET request to the PHP file — passes product_id in the URL query string
+    const res  = await fetch(`api/reviews/get.php?product_id=${productId}`);
+    const data = await res.json(); // parse the JSON that PHP sent back
+    if (!data.success) throw new Error();
+    renderReviews(productId, data.reviews, data.user_review); // hand off to the render function
+  } catch {
+    section.innerHTML = '<p ...>Impossible de charger les avis.</p>';
+  }
+}
+renderReviews(productId, reviews, userReview) — builds and injects HTML
+
+function renderReviews(productId, reviews, userReview) {
+  const section = $('reviews-section');
+  const session = getSession(); // from auth.js — is the user logged in?
+
+  let formHtml = '';
+
+  if (!session) {
+    // Not logged in → show a login prompt button
+    formHtml = `<button onclick="showLoginModal()">Connectez-vous pour laisser un avis</button>`;
+
+  } else if (userReview) {
+    // Already has a review → show it with Edit and Delete buttons
+    formHtml = `
+      <div id="user-review-block" data-rating="${userReview.rating}" data-comment="${escHtml(userReview.comment || '')}">
+        <button onclick="editReview(${productId})">Modifier</button>
+        <button onclick="deleteReview(${productId})">Supprimer</button>
+        <div>${stars(userReview.rating)}</div>
+        <p>${escHtml(userReview.comment)}</p>
+      </div>`;
+
+  } else {
+    // Logged in, no review yet → show the submission form with 5 star buttons
+    formHtml = `
+      <div id="user-review-block">
+        ${[1,2,3,4,5].map(i => `<button onclick="setReviewStar(${i})" id="rev-star-${i}">★</button>`).join('')}
+        <textarea id="review-comment" placeholder="Partagez votre expérience…"></textarea>
+        <button onclick="submitReview(${productId})" id="review-submit-btn">Publier l'avis</button>
+      </div>`;
+  }
+
+  // Build the list of other users' reviews
+  const listHtml = reviews.map(r => `
+    <div>
+      <span>${escHtml(r.full_name)}</span>
+      <span>${formatReviewDate(r.created_at)}</span>
+      <div>${stars(r.rating)}</div>
+      <p>${escHtml(r.comment)}</p>
+    </div>
+  `).join('');
+
+  // Inject everything into the div at once — single DOM write
+  section.innerHTML = formHtml + listHtml;
+}
+submitReview(productId) — sends data to the API
+
+async function submitReview(productId) {
+  if (_reviewRating === 0) { toast('Veuillez choisir une note.'); return; }
+  const comment = $('review-comment').value || '';
+  const btn = $('review-submit-btn');
+  btn.disabled = true; // prevent double-submit
+
+  try {
+    const res = await fetch('api/reviews/submit.php', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // JSON.stringify converts JS object → JSON string for PHP to read
+      body:    JSON.stringify({ product_id: productId, rating: _reviewRating, comment }),
+    });
+    const data = await res.json();
+    if (!data.success) { toast(data.message); return; }
+
+    // PHP returned the new aggregate stats — update the product display
+    updateProductRatingDisplay(data.rating, data.reviews);
+    toast('Avis publié avec succès !');
+    loadReviews(productId); // re-fetch to show the updated section
+  } catch {
+    toast('Erreur réseau.');
+  }
+}
+deleteReview(productId) — sends a delete request
+
+async function deleteReview(productId) {
+  const res = await fetch('api/reviews/delete.php', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ product_id: productId }), // just the product ID — PHP knows the user from the session
+  });
+  const data = await res.json();
+  if (!data.success) { toast(data.message); return; }
+  updateProductRatingDisplay(data.rating, data.reviews);
+  toast('Avis supprimé.');
+  loadReviews(productId); // re-render
+}
+The Full Data Flow — One Complete Round Trip
+Here is exactly what happens when a user clicks "Publier l'avis":
+
+
+[Browser]                    [JavaScript]              [PHP]                 [MySQL]
+  User clicks submit  ──►  submitReview(5)
+                           fetch POST /api/reviews/submit.php
+                           body: { product_id:5, rating:4, comment:"Très bon" }
+                                                   ──►  session_start()
+                                                        $_SESSION['user_id'] = 12
+                                                        $body = json_decode(input)
+                                                        $productId = 5, $rating = 4
+                                                        Validate input ✓
+                                                        getDB() ──►  connect to MySQL
+                                                        INSERT INTO product_reviews ...
+                                                        ON DUPLICATE KEY UPDATE ...
+                                                                          ──►  row saved
+                                                        UPDATE products SET rating=...
+                                                                          ──►  aggregate updated
+                                                        SELECT rating, review_count
+                                                                          ◄──  4.7, 99
+                                                        echo json_encode({success:true, rating:4.7, reviews:99})
+                           ◄──  { success: true, rating: 4.7, reviews: 99 }
+                           updateProductRatingDisplay(4.7, 99)
+                           loadReviews(5)  ──► GET /api/reviews/get.php?product_id=5
+                                                   ──►  SELECT reviews from DB
+                                              ◄──  { success:true, reviews:[...], user_review:{...} }
+                           renderReviews(...)
+  Page shows new review  ◄──  section.innerHTML = ...
+The Build Order Summary
+Step	What you create	Why
+1	SQL table CREATE TABLE product_reviews	Data needs a home before code can use it
+2	api/config/db.php — getDB() helper	All API files need a shared DB connection
+3	api/reviews/get.php	Read-only endpoint, build this first so you can test data retrieval
+4	api/reviews/submit.php	Write endpoint — requires the table + connection already working
+5	api/reviews/delete.php	Same pattern as submit, simpler
+6	HTML placeholder <div id="reviews-section">	Just a target for JS to write into
+7	loadReviews() + renderReviews() in JS	Connects the HTML to the GET API
+8	submitReview() + deleteReview() in JS	Connects the form actions to the POST APIs
+The key insight: PHP never builds HTML. PHP only speaks JSON. JavaScript only speaks to PHP via fetch(). The HTML is always built by JavaScript using the data PHP returned. This is why the project has no PHP template files — it's a clean separation.
+
+so for example in the get.php file it get the data from the db and encoded as json file ?
+Yes, exactly. Here's the flow in simple terms:
+
+
+MySQL DB  →  PHP fetches rows  →  json_encode()  →  Browser receives JSON string
+Breaking down api/reviews/get.php:
+
+
+// 1. Query the DB — $rows is now a PHP array like:
+//    [ ['id'=>1, 'rating'=>5, 'comment'=>'Très bon', 'full_name'=>'Ahmed'] ]
+$rows = $stmt->fetchAll();
+
+// 2. json_encode() converts that PHP array into a JSON string:
+//    {"success":true,"reviews":[{"id":1,"rating":5,"comment":"Très bon","full_name":"Ahmed"}]}
+echo json_encode(['success' => true, 'reviews' => $rows, 'user_review' => $userReview]);
+And on the JavaScript side in user/script.js:819:
+
+
+const res  = await fetch(`api/reviews/get.php?product_id=${productId}`);
+// res.json() takes that JSON string and converts it back into a JS object
+const data = await res.json();
+
+// Now data.reviews is a normal JS array you can loop over
+renderReviews(productId, data.reviews, data.user_review);
+So the chain is:
+
+
+DB row (MySQL)
+  → fetchAll()     → PHP associative array
+  → json_encode()  → JSON string sent over HTTP
+  → res.json()     → JavaScript object
+  → renderReviews  → HTML injected into the page
+The header('Content-Type: application/json') at the top of the PHP file just tells the browser "what's coming back is JSON, not HTML" — it's like labeling the package before you send it.
+
+and when we d othe json decode ?
+json_decode is used in the opposite direction — when PHP needs to read data that JavaScript sent.
+
+Compare the two:
+
+
+JavaScript → sends JSON → PHP reads it with json_decode()   (submit, delete)
+PHP → sends JSON → JavaScript reads it with res.json()      (get)
+You can see it in api/reviews/submit.php:17 and api/reviews/delete.php:17:
+
+
+// JavaScript sent this in the request body:
+// { "product_id": 5, "rating": 4, "comment": "Très bon" }
+
+// php://input reads the raw body of the HTTP request
+// json_decode(..., true) converts the JSON string into a PHP array
+$body = json_decode(file_get_contents('php://input'), true);
+
+// Now you can access it like a normal PHP array
+$productId = $body['product_id'];  // 5
+$rating    = $body['rating'];      // 4
+$comment   = $body['comment'];     // "Très bon"
+So the rule is simple:
+
+Situation	Function
+PHP sending data to JS	json_encode()
+PHP receiving data from JS	json_decode()
+JS sending data to PHP	JSON.stringify()
+JS receiving data from PHP	res.json()
+The GET endpoint (get.php) never uses json_decode because JavaScript doesn't send a body with GET requests — it just puts the data in the URL (?product_id=5), so PHP reads it from $_GET['product_id'] directly.
+
+what is this mean php://input'
+php://input is a special PHP stream that lets you read the raw body of the HTTP request.
+
+Think of an HTTP request like a letter:
+
+
+┌─────────────────────────────────────┐
+│ ENVELOPE (Headers)                  │
+│   POST /api/reviews/submit.php      │
+│   Content-Type: application/json    │
+├─────────────────────────────────────┤
+│ LETTER CONTENT (Body)               │
+│   {"product_id":5,"rating":4}       │
+└─────────────────────────────────────┘
+php://input reads that letter content — the raw body.
+
+When JavaScript does this:
+
+
+fetch('api/reviews/submit.php', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ product_id: 5, rating: 4, comment: 'Très bon' })
+});
+The string {"product_id":5,"rating":4,"comment":"Très bon"} is sent as the body of the request.
+
+PHP has no automatic way to read JSON bodies — $_POST only works for HTML form submissions (application/x-www-form-urlencoded). So you read it manually:
+
+
+// file_get_contents reads the entire body as a raw string
+$raw  = file_get_contents('php://input');
+// $raw = '{"product_id":5,"rating":4,"comment":"Très bon"}'
+
+// json_decode converts that string into a PHP array
+$body = json_decode($raw, true);
+// $body = ['product_id' => 5, 'rating' => 4, 'comment' => 'Très bon']
+Why php:// prefix?
+
+PHP has several of these special "virtual files" called streams:
+
+Stream	What it reads
+php://input	Raw HTTP request body
+php://output	Where echo writes to
+php://stdin	Terminal input (CLI only)
+They're not real files on disk — they're built-in channels PHP provides. The php:// prefix is just how PHP names them to distinguish from real file paths.

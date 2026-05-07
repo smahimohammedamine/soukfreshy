@@ -1,0 +1,162 @@
+.auth-backdrop {
+  /* Disable blur to avoid full-screen repaints while typing */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.auth-modal-shell {
+  border: 1px solid #e6efe9;
+  box-shadow: 0 10px 22px rgba(15, 58, 31, 0.12);
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.auth-modal-shell::-webkit-scrollbar {
+  width: 8px;
+}
+
+.auth-modal-shell::-webkit-scrollbar-thumb {
+  background: rgba(30, 107, 60, 0.24);
+  border-radius: 999px;
+}
+
+.auth-modal-shell::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.auth-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #f2f8f5;
+  border: 1px solid #dcebe2;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.auth-mode-btn {
+  border: 0;
+  background: transparent;
+  border-radius: 9px;
+  padding: 10px 8px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5f6f67;
+  transition: all 0.22s ease;
+}
+
+.auth-mode-btn.active {
+  background: #ffffff;
+  color: #1e6b3c;
+  box-shadow: 0 3px 10px rgba(30, 107, 60, 0.1);
+}
+
+.auth-role-row {
+  border: 1px solid #e5ece8;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #f9fcfa;
+}
+
+.auth-role-label {
+  display: block;
+  font-size: 12px;
+  color: #5d6b64;
+  margin-bottom: 8px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 600;
+}
+
+.auth-role-options {
+  display: flex;
+  gap: 8px;
+}
+
+.auth-role-chip {
+  flex: 1;
+  position: relative;
+}
+
+.auth-role-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auth-role-chip span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;
+  border-radius: 10px;
+  border: 1px solid #dce8e2;
+  background: white;
+  color: #4f5e57;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.auth-role-chip input:checked + span {
+  border-color: #1e6b3c;
+  color: #1e6b3c;
+  background: #ecf8f1;
+}
+
+#farmer-extra-fields {
+  animation: fade-slide 0.25s ease both;
+}
+
+.auth-inline-message {
+  margin-top: 10px;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
+}
+
+.auth-inline-message.ok {
+  background: #ecfdf3;
+  border: 1px solid #b8ebcd;
+  color: #166534;
+}
+
+.auth-inline-message.error {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+
+#auth-login-form .input-field,
+#auth-register-form .input-field {
+  /* Keep focus updates cheap for smoother typing */
+  background: #fbfcfc;
+  transition: border-color 0.08s linear, background-color 0.08s linear;
+  box-shadow: none !important;
+  contain: layout paint;
+}
+
+#auth-login-form .input-field:focus,
+#auth-register-form .input-field:focus {
+  box-shadow: none;
+  background: #ffffff;
+}
+
+@keyframes fade-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
