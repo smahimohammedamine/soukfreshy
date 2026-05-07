@@ -48,6 +48,7 @@
     <div class="nav-item active" onclick="showSection('dashboard',this)"><i class="fas fa-chart-pie"></i> Tableau de bord</div>
     <div class="nav-item" onclick="showSection('orders',this)" id="nav-orders"><i class="fas fa-shopping-basket"></i> Commandes <span class="nav-badge" id="new-orders-badge">3</span></div>
     <div class="nav-item" onclick="showSection('products',this)"><i class="fas fa-seedling"></i> Produits</div>
+    <div class="nav-item" onclick="showSection('weekly-boxes',this)"><i class="fas fa-box-open"></i> Boîtes Hebdo</div>
     <div class="nav-item" onclick="showSection('categories',this)"><i class="fas fa-tags"></i> Catégories</div>
     <div class="nav-item" onclick="showSection('customers',this)"><i class="fas fa-users"></i> Utilisateurs</div>
     <div class="nav-item" onclick="showSection('farmers',this)"><i class="fas fa-tractor"></i> Agriculteurs</div>
@@ -231,6 +232,17 @@
           </select>
         </div>
         <div class="products-grid" id="products-grid"></div>
+      </div>
+
+      <!-- ═══ WEEKLY BOXES ═══ -->
+      <div id="sec-weekly-boxes" class="section">
+        <div class="card">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <h3><i class="fas fa-box-open" style="color:var(--accent);margin-right:7px"></i>Boîtes Hebdomadaires</h3>
+            <button class="btn btn-primary btn-sm" onclick="openBoxModal(null)"><i class="fas fa-plus"></i> Nouvelle boîte</button>
+          </div>
+          <div class="products-grid" id="weekly-boxes-grid"></div>
+        </div>
       </div>
 
       <!-- ═══ CATEGORIES ═══ -->
@@ -526,6 +538,81 @@
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('user-modal')">Fermer</button>
       <button class="btn" id="user-modal-toggle-btn" onclick="userModalToggle()"></button>
+    </div>
+  </div>
+</div>
+
+<!-- WEEKLY BOX CREATE / EDIT MODAL -->
+<div class="modal-backdrop" id="box-modal">
+  <div class="modal" style="max-width:560px">
+    <h2 id="box-modal-title"><i class="fas fa-box-open" style="color:var(--accent);margin-right:8px"></i>Boîte Hebdomadaire</h2>
+
+    <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
+      <div style="flex-shrink:0;width:90px;height:90px;border-radius:10px;overflow:hidden;border:2px solid var(--border);background:var(--bg-card);display:flex;align-items:center;justify-content:center">
+        <img id="box-img-preview" src="" alt="" style="width:100%;height:100%;object-fit:cover;display:none">
+        <i id="box-img-fallback" class="fas fa-box-open" style="font-size:2rem;color:var(--text-muted)"></i>
+      </div>
+      <div style="flex:1">
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Image de la boîte (jpg/png/webp — max 3 Mo)</label>
+          <input type="file" id="box-img-file" accept="image/jpeg,image/png,image/webp" onchange="previewBoxImg(this)">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group"><label>Titre de la boîte <span style="color:var(--red)">*</span></label><input type="text" id="box-title" placeholder="ex: Boîte Fraîcheur du Marché"></div>
+    <div class="form-group"><label>Description</label><textarea id="box-desc" rows="2" style="resize:vertical" placeholder="Courte description de la boîte…"></textarea></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>Type <span style="color:var(--red)">*</span></label>
+        <select id="box-type"><!-- populated from categories --></select>
+      </div>
+      <div class="form-group">
+        <label>Prix (DA) <span style="color:var(--red)">*</span></label>
+        <input type="number" id="box-price" min="0" step="50" placeholder="ex: 1500">
+      </div>
+      <div class="form-group">
+        <label>Quantité disponible</label>
+        <input type="number" id="box-qty" min="0" placeholder="ex: 20">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Produits inclus <span style="font-size:.75rem;color:var(--text-muted)">(sélectionner dans la liste)</span></label>
+      <div style="border:1px solid var(--border);border-radius:8px;background:var(--bg-card)">
+        <div style="padding:8px 8px 4px">
+          <input type="text" id="box-products-search" placeholder="Filtrer les produits…"
+                 style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);font-size:.82rem;box-sizing:border-box"
+                 oninput="filterBoxProducts()">
+        </div>
+        <div id="box-products-list" style="max-height:200px;overflow-y:auto;padding:4px 8px 8px;display:flex;flex-direction:column;gap:2px">
+          <!-- populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group" style="display:flex;align-items:center;gap:10px">
+      <label style="margin:0">Disponible à la vente</label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="box-active" checked style="width:18px;height:18px;accent-color:var(--green)">
+        <span id="box-active-label" style="font-size:.82rem;color:var(--text-muted)">Active</span>
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('box-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveBox()"><i class="fas fa-save"></i> Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- WEEKLY BOX DETAIL VIEW MODAL (admin) -->
+<div class="modal-backdrop" id="box-view-modal">
+  <div class="modal" style="max-width:480px">
+    <div id="box-view-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('box-view-modal')">Fermer</button>
     </div>
   </div>
 </div>

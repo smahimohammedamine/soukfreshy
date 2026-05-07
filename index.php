@@ -282,6 +282,53 @@
     </div>
   </section>
 
+  <!-- ══ WEEKLY BOXES ══ -->
+  <section id="weekly-boxes-section" class="py-14 px-4 md:px-8" style="background:linear-gradient(160deg,#fff8ee 0%,#fffdf8 60%,#f0faf4 100%);border-top:1px solid #f0e8d0;border-bottom:1px solid #e4f0e9;">
+    <div class="max-w-[1100px] mx-auto">
+      <div class="text-center mb-9">
+        <span class="inline-block mb-2 px-3 py-1 rounded-full font-body font-semibold text-[11px] uppercase tracking-[0.16em]" style="color:#c27a00;background:#fff3d6;">Offres spéciales</span>
+        <h2 class="text-3xl font-display font-bold leading-tight mb-3" style="color:#2c1a00;">Boîtes <em style="color:#f0a500;">Fraîcheur</em> de la semaine</h2>
+        <p class="font-body text-sm max-w-[50ch] mx-auto leading-relaxed" style="color:#6b5a3e;">Composées par notre équipe à partir des surplus de récolte. Fraîcheur garantie, prix réduits.</p>
+      </div>
+      <div id="weekly-boxes-grid-user" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+      <div id="weekly-boxes-empty" class="hidden text-center py-10 font-body text-sm" style="color:#a08060;">
+        <i class="fas fa-box-open text-3xl mb-3 block" style="color:#f0a500;opacity:.55"></i>Aucune boîte disponible pour le moment.
+      </div>
+    </div>
+  </section>
+
+  <!-- WEEKLY BOX DETAIL MODAL -->
+  <div id="box-detail-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center p-4 hidden" style="background:rgba(10,30,15,0.6);backdrop-filter:blur(3px)" onclick="if(event.target===this)closeBoxDetail()">
+    <div class="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl" style="background:#fff;max-height:90vh;display:flex;flex-direction:column">
+      <div id="box-detail-img-wrap" style="flex-shrink:0;height:200px;overflow:hidden;background:#f5f1eb;position:relative">
+        <img id="box-detail-img" src="" alt="" class="w-full h-full object-cover">
+        <div id="box-detail-img-fallback" class="absolute inset-0 hidden items-center justify-center text-5xl">📦</div>
+        <div id="box-detail-type-badge" class="absolute top-3 left-3 text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(255,255,255,0.88);box-shadow:0 1px 6px rgba(0,0,0,.15)"></div>
+        <button onclick="closeBoxDetail()" class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm" style="background:rgba(0,0,0,.35);color:#fff">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="px-5 pt-4 pb-5 overflow-y-auto flex-1">
+        <h3 id="box-detail-title" class="font-display font-bold text-xl mb-1" style="color:#1a3320"></h3>
+        <p id="box-detail-desc" class="font-body text-sm mb-4" style="color:#6b7a72"></p>
+        <div class="mb-4">
+          <p class="font-body text-xs font-semibold uppercase tracking-widest mb-2" style="color:#a08060">Produits inclus</p>
+          <ul id="box-detail-products" class="space-y-1.5"></ul>
+        </div>
+        <div class="flex items-center justify-between pt-3" style="border-top:1px solid #eee">
+          <div>
+            <p class="font-body text-xs" style="color:#a08060">Prix de la boîte</p>
+            <p id="box-detail-price" class="font-display font-bold text-2xl" style="color:#1e6b3c"></p>
+          </div>
+          <div class="text-right">
+            <p class="font-body text-xs" style="color:#a08060">Disponibilité</p>
+            <p id="box-detail-qty" class="font-body text-sm font-bold"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── FOOTER + CONTACT ── -->
   <footer id="footer-section" class="footer-wrap min-h-screen px-6 md:px-8 py-12 md:py-14 flex items-center">
     <div class="max-w-[1120px] mx-auto w-full">

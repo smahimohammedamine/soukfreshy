@@ -15,6 +15,8 @@ let admins           = [];
 let editAdminId      = null;
 let categories       = [];
 let editCategoryId   = null;
+let weeklyBoxes      = [];
+let editBoxId        = null;
 
 const weekDays = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
 
@@ -33,6 +35,7 @@ const API = {
   settings:      '../api/admin/settings.php',
   admins:        '../api/admin/admins.php',
   categories:    '../api/admin/categories.php',
+  weeklyBoxes:   '../api/admin/weekly-boxes.php',
 };
 
 async function apiFetch(url, opts = {}) {
@@ -102,7 +105,7 @@ async function initApp() {
   document.getElementById('page-date').textContent =
     now.toLocaleDateString('fr-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
-  const [dashRes, ordersRes, productsRes, usersRes, notifsRes, settingsRes, adminsRes, catsRes] = await Promise.all([
+  const [dashRes, ordersRes, productsRes, usersRes, notifsRes, settingsRes, adminsRes, catsRes, boxesRes] = await Promise.all([
     apiFetch(API.dashboard),
     apiFetch(API.orders),
     apiFetch(API.products),
@@ -111,6 +114,7 @@ async function initApp() {
     apiFetch(API.settings),
     apiFetch(API.admins),
     apiFetch(API.categories),
+    apiFetch(API.weeklyBoxes),
   ]);
 
   /* Settings */
@@ -181,6 +185,12 @@ async function initApp() {
     renderCategories();
   }
 
+  /* Weekly Boxes */
+  if (boxesRes.success) {
+    weeklyBoxes = boxesRes.boxes;
+    renderWeeklyBoxes();
+  }
+
   /* Notifications */
   if (notifsRes.success) {
     notifications = notifsRes.notifications;
@@ -213,7 +223,8 @@ const sectionTitles = {
   products:'Gestion des produits', customers:'Utilisateurs',
   farmers:'Agriculteurs', commissions:'Commissions',
   notifications:'Notifications', settings:'Paramètres',
-  admins:'Administrateurs', categories:'Catégories'
+  admins:'Administrateurs', categories:'Catégories',
+  'weekly-boxes':'Boîtes Hebdomadaires',
 };
 
 function showSection(name, el) {
@@ -999,4 +1010,234 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ═══════════════════════════════════════════
+   WEEKLY BOXES
+═══════════════════════════════════════════ */
+const _boxCatColors = ['var(--orange)','var(--green)','var(--teal)','var(--purple)','var(--accent)'];
+function getBoxTypeLabel(slug) {
+  if (slug === 'mixed') return '🥗 Mixte';
+  const cat = categories.find(c => c.slug === slug);
+  return cat ? cat.name_fr : slug;
+}
+function getBoxTypeColor(slug) {
+  const idx = categories.findIndex(c => c.slug === slug);
+  return _boxCatColors[Math.max(idx, 0) % _boxCatColors.length];
+}
+
+function renderWeeklyBoxes() {
+  const grid = document.getElementById('weekly-boxes-grid');
+  if (!grid) return;
+  if (!weeklyBoxes.length) {
+    grid.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i><p>Aucune boîte hebdomadaire</p></div>';
+    return;
+  }
+  grid.innerHTML = weeklyBoxes.map(b => `
+    <div class="product-card" id="box-card-${b.id}" style="opacity:${b.is_active ? 1 : 0.55}">
+      <div class="product-card-img">
+        <img src="${b.image || ''}" alt="${b.title}"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <span class="img-fallback">📦</span>
+        ${!b.is_active ? '<div style="position:absolute;top:8px;left:8px;background:var(--red);color:#fff;font-size:.65rem;font-weight:800;padding:2px 7px;border-radius:20px;text-transform:uppercase">Inactif</div>' : ''}
+      </div>
+      <div class="product-card-body">
+        <h4 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${b.title}">${b.title}</h4>
+        <p style="font-size:.75rem;color:${getBoxTypeColor(b.box_type)};font-weight:700">${getBoxTypeLabel(b.box_type)}</p>
+        <p style="font-size:.73rem;color:var(--text-muted)"><i class="fas fa-list-ul" style="margin-right:3px"></i>${b.products.length} produit${b.products.length !== 1 ? 's' : ''}</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <span class="product-price">${formatDA(b.price)}</span>
+          <span style="font-size:.75rem;color:${b.quantity < 5 ? 'var(--red)' : 'var(--green)'};font-weight:700">${b.quantity} dispo</span>
+        </div>
+        <div class="product-actions" style="margin-top:8px">
+          <button class="btn btn-outline btn-sm btn-icon" onclick="viewBox(${b.id})" title="Voir détail"><i class="fas fa-eye"></i></button>
+          <button class="btn btn-outline btn-sm" style="flex:1" onclick="openBoxModal(${b.id})"><i class="fas fa-edit"></i> Modifier</button>
+          <button class="btn ${b.is_active ? 'btn-danger' : 'btn-primary'} btn-sm btn-icon" onclick="toggleBox(${b.id})" title="${b.is_active ? 'Désactiver' : 'Activer'}">
+            <i class="fas ${b.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i>
+          </button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteBox(${b.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openBoxModal(id) {
+  editBoxId = id;
+  const b = id ? weeklyBoxes.find(x => x.id === id) : null;
+
+  document.getElementById('box-modal-title').innerHTML =
+    `<i class="fas fa-box-open" style="color:var(--accent);margin-right:8px"></i>${b ? 'Modifier — ' + b.title : 'Nouvelle boîte'}`;
+
+  document.getElementById('box-title').value    = b ? b.title : '';
+  document.getElementById('box-desc').value     = b ? (b.description || '') : '';
+  document.getElementById('box-price').value    = b ? b.price : '';
+  document.getElementById('box-qty').value      = b ? b.quantity : '';
+  // Populate type select from categories
+  const typeSelect = document.getElementById('box-type');
+  typeSelect.innerHTML = categories.map(c => `<option value="${c.slug}">${c.name_fr}</option>`).join('')
+    + '<option value="mixed">🥗 Mixte</option>';
+  const defaultType = categories[0]?.slug || 'mixed';
+  typeSelect.value = b ? (b.box_type || defaultType) : defaultType;
+
+  // Populate product checkboxes
+  const selectedProducts = new Set(b ? (b.products || []) : []);
+  document.getElementById('box-products-search').value = '';
+  const activeProducts = products.filter(p => p.is_active == 1 || p.is_active === true);
+  document.getElementById('box-products-list').innerHTML = activeProducts.length
+    ? activeProducts.map(p => `<label class="box-product-item" data-name="${p.name.toLowerCase()}" style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:.82rem">
+        <input type="checkbox" class="box-product-cb" value="${p.name}"
+               style="width:15px;height:15px;accent-color:var(--green);flex-shrink:0"
+               ${selectedProducts.has(p.name) ? 'checked' : ''}>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</span>
+        <span style="font-size:.73rem;color:var(--text-muted);flex-shrink:0">${p.price} DA/kg</span>
+      </label>`).join('')
+    : '<p style="text-align:center;color:var(--text-muted);padding:10px 0;font-size:.82rem">Aucun produit disponible</p>';
+  document.getElementById('box-active').checked = b ? b.is_active : true;
+  document.getElementById('box-active-label').textContent = (b && !b.is_active) ? 'Inactive' : 'Active';
+  document.getElementById('box-img-file').value = '';
+
+  const preview  = document.getElementById('box-img-preview');
+  const fallback = document.getElementById('box-img-fallback');
+  if (b && b.image) {
+    preview.src           = b.image;
+    preview.style.display = 'block';
+    fallback.style.display= 'none';
+  } else {
+    preview.style.display = 'none';
+    fallback.style.display= '';
+  }
+  openModal('box-modal');
+}
+
+function previewBoxImg(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const preview  = document.getElementById('box-img-preview');
+    const fallback = document.getElementById('box-img-fallback');
+    preview.src           = e.target.result;
+    preview.style.display = 'block';
+    fallback.style.display= 'none';
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function filterBoxProducts() {
+  const q = document.getElementById('box-products-search').value.toLowerCase();
+  document.querySelectorAll('#box-products-list .box-product-item').forEach(item => {
+    item.style.display = (!q || item.dataset.name.includes(q)) ? '' : 'none';
+  });
+}
+
+document.getElementById('box-active').addEventListener('change', function () {
+  document.getElementById('box-active-label').textContent = this.checked ? 'Active' : 'Inactive';
+});
+
+async function saveBox() {
+  const title = document.getElementById('box-title').value.trim();
+  const price = parseFloat(document.getElementById('box-price').value) || 0;
+  if (!title || price <= 0) {
+    showToast('Titre et prix sont requis.');
+    return;
+  }
+
+  const productsArr = [...document.querySelectorAll('#box-products-list .box-product-cb:checked')].map(cb => cb.value);
+  const isActive    = document.getElementById('box-active').checked ? 1 : 0;
+
+  const form = new FormData();
+  form.append('action',      editBoxId ? 'update' : 'create');
+  if (editBoxId) form.append('id', editBoxId);
+  form.append('title',       title);
+  form.append('description', document.getElementById('box-desc').value.trim());
+  form.append('price',       price);
+  form.append('quantity',    parseInt(document.getElementById('box-qty').value, 10) || 0);
+  form.append('box_type',    document.getElementById('box-type').value);
+  form.append('products',    JSON.stringify(productsArr));
+  form.append('is_active',   isActive);
+
+  const file = document.getElementById('box-img-file').files[0];
+  if (file) form.append('image', file);
+
+  let res;
+  try {
+    res = await apiFetch(API.weeklyBoxes, { method: 'POST', body: form });
+  } catch {
+    showToast('Erreur réseau.');
+    return;
+  }
+
+  if (res.success) {
+    closeModal('box-modal');
+    // Reload list from server to stay in sync
+    const fresh = await apiFetch(API.weeklyBoxes);
+    if (fresh.success) { weeklyBoxes = fresh.boxes; renderWeeklyBoxes(); }
+    showToast(editBoxId ? 'Boîte mise à jour.' : 'Boîte créée avec succès.');
+  } else {
+    showToast(res.message || 'Erreur lors de l\'enregistrement.');
+  }
+}
+
+async function deleteBox(id) {
+  const b = weeklyBoxes.find(x => x.id === id);
+  if (!b) return;
+  if (!confirm(`Supprimer la boîte "${b.title}" ?`)) return;
+
+  const res = await apiFetch(API.weeklyBoxes, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete', id }),
+  });
+
+  if (res.success) {
+    weeklyBoxes = weeklyBoxes.filter(x => x.id !== id);
+    renderWeeklyBoxes();
+    showToast('Boîte supprimée.');
+  } else {
+    showToast(res.message || 'Erreur lors de la suppression.');
+  }
+}
+
+async function toggleBox(id) {
+  const res = await apiFetch(API.weeklyBoxes, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'toggle', id }),
+  });
+
+  if (res.success) {
+    const b = weeklyBoxes.find(x => x.id === id);
+    if (b) b.is_active = res.is_active;
+    renderWeeklyBoxes();
+    showToast(res.is_active ? 'Boîte activée.' : 'Boîte désactivée.');
+  } else {
+    showToast(res.message || 'Erreur.');
+  }
+}
+
+function viewBox(id) {
+  const b = weeklyBoxes.find(x => x.id === id);
+  if (!b) return;
+  const statusBadgeHtml = b.is_active
+    ? '<span class="badge badge-active" style="background:#e3f5eb;color:var(--green-dark)"><span class="dot dot-green"></span>Active</span>'
+    : '<span class="badge badge-cancelled"><span class="dot dot-red"></span>Inactive</span>';
+
+  document.getElementById('box-view-body').innerHTML = `
+    ${b.image ? `<img src="${b.image}" alt="${b.title}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:14px">` : ''}
+    <h2 style="margin-bottom:4px;font-size:1.15rem">${b.title}</h2>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <span style="font-size:.8rem;font-weight:700;color:${getBoxTypeColor(b.box_type)}">${getBoxTypeLabel(b.box_type)}</span>
+      ${statusBadgeHtml}
+    </div>
+    ${b.description ? `<p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">${b.description}</p>` : ''}
+    <div class="order-detail-row"><span>Prix</span><strong style="color:var(--green-dark);font-size:1.05rem">${formatDA(b.price)}</strong></div>
+    <div class="order-detail-row"><span>Quantité disponible</span><strong>${b.quantity}</strong></div>
+    <div style="margin-top:12px">
+      <p style="font-weight:700;font-size:.83rem;color:var(--text-muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.04em">Produits inclus</p>
+      <ul style="list-style:disc;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+        ${b.products.length ? b.products.map(p => `<li style="font-size:.88rem">${p}</li>`).join('') : '<li style="color:var(--text-muted)">Aucun produit listé</li>'}
+      </ul>
+    </div>
+  `;
+  openModal('box-view-modal');
 }

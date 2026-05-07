@@ -92,7 +92,7 @@ function showPage(name) {
   target.classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'instant' });
 
-  if (name === 'home')     { animateHero(); animateWelcomeSection(); animateServicesSection(); animateFooterSection(); renderFeatured(); }
+  if (name === 'home')     { animateHero(); animateWelcomeSection(); animateServicesSection(); animateFooterSection(); renderFeatured(); loadWeeklyBoxes(); }
   if (name === 'shop')       loadProducts();
   if (name === 'wishlist')   renderWishlist();
   if (name === 'panier')     renderPanier();
@@ -1174,6 +1174,131 @@ async function loadUserOrders() {
 window.loadUserOrders = loadUserOrders;
 
 // ─── Init ─────────────────────────────────────
+// ─── Weekly Boxes ──────────────────────────────
+let _weeklyBoxes = [];
+
+async function loadWeeklyBoxes() {
+  try {
+    const res  = await fetch('api/weekly-boxes.php');
+    const data = await res.json();
+    _weeklyBoxes = data.success ? (data.boxes || []) : [];
+  } catch {
+    _weeklyBoxes = [];
+  }
+  renderWeeklyBoxes();
+}
+
+const _boxTypeLabel = { fruits: '🍊 Fruits', vegetables: '🥬 Légumes', mixed: '🥗 Mixte' };
+const _boxTypeColor = { fruits: '#d97a00', vegetables: '#1e6b3c', mixed: '#178a7a' };
+
+function renderWeeklyBoxes() {
+  const grid  = $('weekly-boxes-grid-user');
+  const empty = $('weekly-boxes-empty');
+  if (!grid) return;
+
+  if (!_weeklyBoxes.length) {
+    grid.innerHTML = '';
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+  if (empty) empty.classList.add('hidden');
+
+  grid.innerHTML = _weeklyBoxes.map(b => `
+    <div class="weekly-box-card group cursor-pointer rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300"
+         style="background:#fff;border:1px solid #f0e8d0"
+         onclick="openBoxDetail(${b.id})">
+      <div style="height:170px;overflow:hidden;position:relative;background:#f5f1eb">
+        ${b.image
+          ? `<img src="${b.image}" alt="${b.title}" style="width:100%;height:100%;object-fit:cover;transition:transform .4s ease" class="group-hover:scale-105">`
+          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:3.5rem">📦</div>`}
+        <div style="position:absolute;top:10px;left:10px;font-size:.72rem;font-weight:800;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,0.9);color:${_boxTypeColor[b.box_type] || '#1e6b3c'};box-shadow:0 1px 6px rgba(0,0,0,.12)">${b.box_type_label || _boxTypeLabel[b.box_type] || b.box_type}</div>
+        ${b.quantity < 5 && b.quantity > 0 ? `<div style="position:absolute;top:10px;right:10px;font-size:.7rem;font-weight:800;padding:3px 9px;border-radius:20px;background:#fff3d6;color:#b35c00">⚡ Dernières ${b.quantity}</div>` : ''}
+        ${b.quantity === 0 ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)"><span style="color:#fff;font-family:Nunito,sans-serif;font-weight:800;font-size:.85rem;letter-spacing:.04em">ÉPUISÉ</span></div>` : ''}
+      </div>
+      <div style="padding:14px 16px 16px">
+        <h4 style="font-family:'Playfair Display',serif;font-weight:700;font-size:1rem;color:#1a3320;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.title}</h4>
+        <ul style="margin:0 0 10px;padding-left:16px;list-style:disc;display:flex;flex-direction:column;gap:2px">
+          ${b.products.slice(0, 3).map(p => `<li style="font-family:Nunito,sans-serif;font-size:.77rem;color:#5a6b61">${p}</li>`).join('')}
+          ${b.products.length > 3 ? `<li style="font-family:Nunito,sans-serif;font-size:.75rem;color:#a08060">+ ${b.products.length - 3} autre(s)…</li>` : ''}
+        </ul>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid #f0ebe0">
+          <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:1.15rem;color:#1e6b3c">${Number(b.price).toLocaleString('fr')} DA</span>
+          <span style="font-family:Nunito,sans-serif;font-size:.75rem;font-weight:600;padding:3px 10px;border-radius:20px;background:#e8f5ee;color:#1e6b3c">Voir le détail →</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  gsap.fromTo('.weekly-box-card',
+    { opacity: 0, y: 18, scale: 0.97 },
+    { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.07, ease: 'power2.out',
+      scrollTrigger: { trigger: '#weekly-boxes-section', start: 'top 82%', once: true } }
+  );
+}
+
+function openBoxDetail(id) {
+  const b = _weeklyBoxes.find(x => x.id === id || x.id === String(id));
+  if (!b) return;
+
+  const img      = $('box-detail-img');
+  const imgFb    = $('box-detail-img-fallback');
+  const typeBadge= $('box-detail-type-badge');
+  const title    = $('box-detail-title');
+  const desc     = $('box-detail-desc');
+  const products = $('box-detail-products');
+  const price    = $('box-detail-price');
+  const qty      = $('box-detail-qty');
+
+  if (b.image) {
+    img.src                  = b.image;
+    img.style.display        = 'block';
+    imgFb.style.display      = 'none';
+    imgFb.classList.remove('flex');
+  } else {
+    img.style.display        = 'none';
+    imgFb.style.display      = 'flex';
+    imgFb.classList.add('flex');
+  }
+
+  typeBadge.textContent  = b.box_type_label || _boxTypeLabel[b.box_type] || b.box_type;
+  typeBadge.style.color  = _boxTypeColor[b.box_type] || '#1e6b3c';
+  title.textContent      = b.title;
+  desc.textContent       = b.description || '';
+  desc.style.display     = b.description ? '' : 'none';
+  price.textContent      = Number(b.price).toLocaleString('fr') + ' DA';
+
+  if (b.quantity === 0) {
+    qty.textContent   = 'Épuisé';
+    qty.style.color   = '#e53e3e';
+  } else if (b.quantity < 5) {
+    qty.textContent   = b.quantity + ' restante(s)';
+    qty.style.color   = '#d97a00';
+  } else {
+    qty.textContent   = b.quantity + ' disponibles';
+    qty.style.color   = '#1e6b3c';
+  }
+
+  products.innerHTML = (b.products && b.products.length)
+    ? b.products.map(p => `<li style="display:flex;align-items:flex-start;gap:7px;font-family:Nunito,sans-serif;font-size:.88rem;color:#3a4a3f"><i class="fas fa-check-circle" style="color:#27a163;margin-top:2px;font-size:.72rem;flex-shrink:0"></i><span>${p}</span></li>`).join('')
+    : '<li style="font-family:Nunito,sans-serif;font-size:.85rem;color:#a08060">Aucun produit listé.</li>';
+
+  const backdrop = $('box-detail-backdrop');
+  backdrop.classList.remove('hidden');
+  gsap.fromTo(backdrop.firstElementChild,
+    { opacity: 0, scale: 0.94, y: 14 },
+    { opacity: 1, scale: 1,    y: 0, duration: 0.28, ease: 'power2.out' }
+  );
+}
+
+function closeBoxDetail() {
+  const backdrop = $('box-detail-backdrop');
+  if (!backdrop) return;
+  gsap.to(backdrop.firstElementChild, {
+    opacity: 0, scale: 0.94, y: 10, duration: 0.2, ease: 'power2.in',
+    onComplete: () => backdrop.classList.add('hidden'),
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   gsap.registerPlugin(ScrollTrigger);
   updateBadges();

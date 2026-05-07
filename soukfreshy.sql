@@ -259,4 +259,25 @@ CREATE TABLE IF NOT EXISTS notifications (
   KEY idx_notif_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ----------------------------------------------------------------
+-- 12. WEEKLY BOXES
+--     Curated boxes assembled by admins from surplus harvest products.
+--     products column stores a JSON array of product name strings.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS weekly_boxes (
+  id          INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  title       VARCHAR(200)  NOT NULL,
+  description TEXT                   DEFAULT NULL,
+  image       TEXT                   DEFAULT NULL,
+  price       DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  quantity    INT UNSIGNED  NOT NULL DEFAULT 0,
+  products    TEXT          NOT NULL DEFAULT '[]',  -- JSON array of product name strings
+  box_type    VARCHAR(100)  NOT NULL DEFAULT 'mixed',
+  is_active   TINYINT(1)    NOT NULL DEFAULT 1,
+  created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_boxes_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
