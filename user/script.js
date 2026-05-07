@@ -688,7 +688,30 @@ function renderPanier() {
 
   container.innerHTML = `
     <div class="space-y-3">
-      ${cart.map(item => `
+      ${cart.map(item => item.item_type === 'box' ? `
+        <div class="bg-white rounded-2xl p-4 flex items-start gap-4" style="border:1px solid #e8f0eb; box-shadow:0 4px 16px rgba(15,58,31,0.07);">
+          <div class="w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0 relative" style="background:#fff8ee">
+            ${item.image
+              ? `<img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+              : ''}
+            <div style="width:100%;height:100%;display:${item.image ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:1.9rem">📦</div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-display font-bold text-gray-900 text-[15px] leading-snug">${item.name}</h3>
+            <p class="font-body text-gray-400 text-xs mt-0.5">${item.price} DA / boîte</p>
+            <div class="flex items-center justify-between mt-2.5">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-body text-xs font-semibold" style="background:#fff3d6;color:#c27a00;border:1px solid #fde68a">
+                <i class="fas fa-box-open text-[10px]"></i> 1 boîte
+              </span>
+              <span class="font-display font-bold text-base" style="color:#1e6b3c;">${item.price} DA</span>
+            </div>
+          </div>
+          <button onclick="removeBoxFromPanier(${item.box_id})" title="Supprimer"
+            class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform active:scale-90"
+            style="background:#fff0f0; border:1px solid #fecdd3; color:#ef4444;">
+            <i class="fas fa-trash-alt text-xs"></i>
+          </button>
+        </div>` : `
         <div class="bg-white rounded-2xl p-4 flex items-start gap-4" style="border:1px solid #e8f0eb; box-shadow:0 4px 16px rgba(15,58,31,0.07);">
           <div class="w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0">
             <img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/200x200/f0faf4/1e6b3c?text=${encodeURIComponent(item.name)}'">
@@ -710,8 +733,7 @@ function renderPanier() {
             style="background:#fff0f0; border:1px solid #fecdd3; color:#ef4444;">
             <i class="fas fa-trash-alt text-xs"></i>
           </button>
-        </div>
-      `).join('')}
+        </div>`).join('')}
     </div>`;
 }
 
@@ -754,8 +776,8 @@ async function syncCartItem(productId, qty) {
 async function loadCartFromDB() {
   if (typeof getSession !== 'function' || !getSession()) return;
 
-  // Upload any in-memory (guest) items first
-  const uploads = cart.filter(i => i.qty > 0);
+  // Upload any in-memory (guest) product items first (boxes always require login)
+  const uploads = cart.filter(i => i.qty > 0 && i.item_type !== 'box');
   if (uploads.length > 0) {
     await Promise.all(uploads.map(i => syncCartItem(i.id, i.qty)));
   }
@@ -1175,7 +1197,8 @@ window.loadUserOrders = loadUserOrders;
 
 // ─── Init ─────────────────────────────────────
 // ─── Weekly Boxes ──────────────────────────────
-let _weeklyBoxes = [];
+let _weeklyBoxes  = [];
+let _currentBoxId = null;
 
 async function loadWeeklyBoxes() {
   try {
@@ -1239,6 +1262,7 @@ function renderWeeklyBoxes() {
 function openBoxDetail(id) {
   const b = _weeklyBoxes.find(x => x.id === id || x.id === String(id));
   if (!b) return;
+  _currentBoxId = b.id;
 
   const img      = $('box-detail-img');
   const imgFb    = $('box-detail-img-fallback');
@@ -1282,6 +1306,8 @@ function openBoxDetail(id) {
     ? b.products.map(p => `<li style="display:flex;align-items:flex-start;gap:7px;font-family:Nunito,sans-serif;font-size:.88rem;color:#3a4a3f"><i class="fas fa-check-circle" style="color:#27a163;margin-top:2px;font-size:.72rem;flex-shrink:0"></i><span>${p}</span></li>`).join('')
     : '<li style="font-family:Nunito,sans-serif;font-size:.85rem;color:#a08060">Aucun produit listé.</li>';
 
+  _updateBoxCartBtn(b);
+
   const backdrop = $('box-detail-backdrop');
   backdrop.classList.remove('hidden');
   gsap.fromTo(backdrop.firstElementChild,
@@ -1297,6 +1323,70 @@ function closeBoxDetail() {
     opacity: 0, scale: 0.94, y: 10, duration: 0.2, ease: 'power2.in',
     onComplete: () => backdrop.classList.add('hidden'),
   });
+}
+
+// ─── Box cart helpers ─────────────────────────
+function _updateBoxCartBtn(b) {
+  const btn   = $('box-cart-btn');
+  const label = $('box-cart-btn-label');
+  if (!btn || !label) return;
+  if (!b || b.quantity === 0) {
+    btn.disabled = true;
+    btn.style.background = '#9ca3af';
+    btn.style.boxShadow  = 'none';
+    label.textContent    = 'Épuisé';
+    return;
+  }
+  const inCart = cart.some(i => i.item_type === 'box' && i.box_id === b.id);
+  btn.disabled = false;
+  if (inCart) {
+    btn.style.background = 'linear-gradient(135deg,#f0a500,#d99300)';
+    btn.style.boxShadow  = '0 6px 20px rgba(240,165,0,0.3)';
+    btn.style.color      = '#0f2a0f';
+    label.textContent    = 'Voir le panier →';
+    btn.onclick          = () => { closeBoxDetail(); showPage('panier'); };
+  } else {
+    btn.style.background = 'linear-gradient(135deg,#1e6b3c,#27a163)';
+    btn.style.boxShadow  = '0 6px 20px rgba(30,107,60,0.3)';
+    btn.style.color      = '#fff';
+    label.textContent    = 'Ajouter au panier';
+    btn.onclick          = addBoxToCart;
+  }
+}
+
+function addBoxToCart() {
+  const b = _weeklyBoxes.find(x => x.id === _currentBoxId || x.id === String(_currentBoxId));
+  if (!b || b.quantity === 0) { toast('Cette boîte est épuisée.'); return; }
+  showLoginModal(() => {
+    if (cart.some(i => i.item_type === 'box' && i.box_id === b.id)) {
+      closeBoxDetail(); showPage('panier'); return;
+    }
+    cart.push({ box_id: b.id, item_type: 'box', name: b.title, price: b.price, qty: 1, unit: 'boîte', image: b.image || '' });
+    syncBoxCartItem(b.id, 1);
+    updateBadges();
+    _updateBoxCartBtn(b);
+    toast(`📦 ${b.title} ajoutée au panier !`);
+  });
+}
+
+async function syncBoxCartItem(boxId, qty) {
+  if (typeof getSession !== 'function' || !getSession()) return;
+  try {
+    await fetch('api/cart/update.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ box_id: boxId, qty }),
+      credentials: 'same-origin',
+    });
+  } catch {}
+}
+
+function removeBoxFromPanier(boxId) {
+  syncBoxCartItem(boxId, 0);
+  cart = cart.filter(i => !(i.item_type === 'box' && i.box_id === boxId));
+  renderPanier();
+  updateBadges();
+  toast('Boîte retirée du panier');
 }
 
 document.addEventListener('DOMContentLoaded', () => {

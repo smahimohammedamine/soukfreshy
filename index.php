@@ -325,6 +325,12 @@
             <p id="box-detail-qty" class="font-body text-sm font-bold"></p>
           </div>
         </div>
+        <button id="box-cart-btn" onclick="addBoxToCart()"
+          class="w-full mt-4 py-3 rounded-xl font-body font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all duration-150 active:scale-95"
+          style="background:linear-gradient(135deg,#1e6b3c,#27a163); box-shadow:0 6px 20px rgba(30,107,60,0.3);">
+          <i class="fas fa-shopping-cart text-sm"></i>
+          <span id="box-cart-btn-label">Ajouter au panier</span>
+        </button>
       </div>
     </div>
   </div>

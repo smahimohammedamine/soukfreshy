@@ -34,18 +34,28 @@ try {
     $db  = getDB();
     $uid = (int) $_SESSION['user_id'];
 
-    // Load cart items with product snapshot data
+    // Load product cart items
     $stmt = $db->prepare(
         'SELECT ci.product_id, ci.qty,
                 p.name, p.price, p.pricing_label, p.farmer_id, p.availability
          FROM cart_items ci
          JOIN products p ON p.id = ci.product_id
-         WHERE ci.user_id = :uid AND p.is_active = 1'
+         WHERE ci.user_id = :uid AND ci.product_id IS NOT NULL AND p.is_active = 1'
     );
     $stmt->execute([':uid' => $uid]);
     $cartItems = $stmt->fetchAll();
 
-    if (empty($cartItems)) {
+    // Load box cart items
+    $stmtB = $db->prepare(
+        'SELECT ci.box_id, wb.title AS name, wb.price, wb.quantity AS stock
+         FROM cart_items ci
+         JOIN weekly_boxes wb ON wb.id = ci.box_id
+         WHERE ci.user_id = :uid AND ci.box_id IS NOT NULL AND wb.is_active = 1'
+    );
+    $stmtB->execute([':uid' => $uid]);
+    $boxItems = $stmtB->fetchAll();
+
+    if (empty($cartItems) && empty($boxItems)) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Votre panier est vide.']);
         exit;
@@ -54,6 +64,12 @@ try {
     foreach ($cartItems as $item) {
         if ($item['availability'] === 'out') {
             echo json_encode(['success' => false, 'message' => "\"{$item['name']}\" est en rupture de stock."]);
+            exit;
+        }
+    }
+    foreach ($boxItems as $box) {
+        if ((int)$box['stock'] <= 0) {
+            echo json_encode(['success' => false, 'message' => "La boîte \"{$box['name']}\" est épuisée."]);
             exit;
         }
     }
@@ -72,6 +88,9 @@ try {
     $subtotal = 0;
     foreach ($cartItems as $item) {
         $subtotal += (float) $item['price'] * (int) $item['qty'];
+    }
+    foreach ($boxItems as $box) {
+        $subtotal += (float) $box['price'];
     }
     $actualDelivery = $subtotal >= $freeMinimum ? 0.00 : $deliveryFee;
     $commissionAmt  = round($subtotal * $commissionRate / 100, 2);
@@ -106,7 +125,7 @@ try {
     ]);
     $orderId = (int) $db->lastInsertId();
 
-    // Insert order items (price snapshots)
+    // Insert product order items (price snapshots)
     $iStmt = $db->prepare(
         'INSERT INTO order_items
            (order_id, product_id, farmer_id, product_name, unit_price, pricing_label, qty, line_total)
@@ -124,6 +143,27 @@ try {
             ':qty'    => (int)   $item['qty'],
             ':line'   => round((float) $item['price'] * (int) $item['qty'], 2),
         ]);
+    }
+
+    // Insert box order items
+    $bStmt = $db->prepare(
+        'INSERT INTO order_items
+           (order_id, box_id, product_name, unit_price, pricing_label, qty, line_total)
+         VALUES
+           (:oid, :bid, :pname, :price, "boîte", 1, :price2)'
+    );
+    $decStmt = $db->prepare(
+        'UPDATE weekly_boxes SET quantity = GREATEST(0, quantity - 1) WHERE id = :id'
+    );
+    foreach ($boxItems as $box) {
+        $bStmt->execute([
+            ':oid'    => $orderId,
+            ':bid'    => (int)   $box['box_id'],
+            ':pname'  => '📦 ' . $box['name'],
+            ':price'  => (float) $box['price'],
+            ':price2' => (float) $box['price'],
+        ]);
+        $decStmt->execute([':id' => (int) $box['box_id']]);
     }
 
     // Clear the user's cart
