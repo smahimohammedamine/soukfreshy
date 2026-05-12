@@ -12,8 +12,9 @@ async function fetchCurrentSession() {
     if (window.__SF_SESSION !== undefined) {
         _session = window.__SF_SESSION.logged_in ? window.__SF_SESSION.user : null;
         syncAuthNavUI();
-        if (_session && typeof loadCartFromDB   === 'function') loadCartFromDB();
-        if (_session && typeof loadWishlistFromDB === 'function') loadWishlistFromDB();
+        if (_session && typeof loadCartFromDB        === 'function') loadCartFromDB();
+        if (_session && typeof loadWishlistFromDB    === 'function') loadWishlistFromDB();
+
         if (!_session && window.__SF_OPEN_LOGIN) openLoginAuto(window.__SF_OPEN_LOGIN);
         return _session;
     }
@@ -116,8 +117,9 @@ function authSuccess(user) {
     closeModal();
     // Merge guest cart then reload from DB
     const syncTasks = [];
-    if (typeof loadCartFromDB    === 'function') syncTasks.push(loadCartFromDB());
-    if (typeof loadWishlistFromDB === 'function') syncTasks.push(loadWishlistFromDB());
+    if (typeof loadCartFromDB        === 'function') syncTasks.push(loadCartFromDB());
+    if (typeof loadWishlistFromDB    === 'function') syncTasks.push(loadWishlistFromDB());
+
     Promise.all(syncTasks).then(() => {
         if (typeof callback === 'function') callback();
         pendingCb = null;

@@ -32,9 +32,7 @@ if ($method === 'GET') {
             ORDER BY p.created_at DESC
         ")->fetchAll();
 
-        $catEmojis = ['vegetables' => '🥬', 'fruits' => '🍊', 'herbs' => '🌿'];
         foreach ($products as &$p) {
-            $p['emoji'] = $catEmojis[$p['cat']] ?? '🌿';
             $p['cat']   = CAT_TO_JS[$p['cat']] ?? $p['cat'];
             $p['price'] = (float)$p['price'];
             $p['stock'] = (int)$p['stock'];

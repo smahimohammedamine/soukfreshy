@@ -65,9 +65,9 @@ $farmerWilaya = htmlspecialchars($_SESSION['wilaya'] ?? '');
             </label>
             <label>Catégorie
               <select id="product-category" required>
-                <option value="vegetables">🥦 Légumes</option>
-                <option value="fruits">🍎 Fruits</option>
-                <option value="herbs">🌿 Herbes aromatiques</option>
+                <option value="vegetables">Légumes</option>
+                <option value="fruits">Fruits</option>
+                <option value="herbs">Herbes aromatiques</option>
               </select>
             </label>
             <label>Type de tarification

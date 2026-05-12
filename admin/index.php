@@ -48,7 +48,8 @@
     <div class="nav-item active" onclick="showSection('dashboard',this)"><i class="fas fa-chart-pie"></i> Tableau de bord</div>
     <div class="nav-item" onclick="showSection('orders',this)" id="nav-orders"><i class="fas fa-shopping-basket"></i> Commandes <span class="nav-badge" id="new-orders-badge">3</span></div>
     <div class="nav-item" onclick="showSection('products',this)"><i class="fas fa-seedling"></i> Produits</div>
-    <div class="nav-item" onclick="showSection('weekly-boxes',this)"><i class="fas fa-box-open"></i> Boîtes Hebdo</div>
+    <div class="nav-item" onclick="showSection('weekly-boxes',this)"><i class="fas fa-box-open"></i> Boîtes <span class="nav-badge" id="boxes-badge" style="display:none"></span></div>
+    <div class="nav-item" onclick="showSection('client-of-week',this)"><i class="fas fa-star"></i> Client de la semaine</div>
     <div class="nav-item" onclick="showSection('categories',this)"><i class="fas fa-tags"></i> Catégories</div>
     <div class="nav-item" onclick="showSection('customers',this)"><i class="fas fa-users"></i> Utilisateurs</div>
     <div class="nav-item" onclick="showSection('farmers',this)"><i class="fas fa-tractor"></i> Agriculteurs</div>
@@ -234,14 +235,94 @@
         <div class="products-grid" id="products-grid"></div>
       </div>
 
-      <!-- ═══ WEEKLY BOXES ═══ -->
+      <!-- ═══ BOÎTES (Weekly + Season) ═══ -->
       <div id="sec-weekly-boxes" class="section">
-        <div class="card">
-          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-            <h3><i class="fas fa-box-open" style="color:var(--accent);margin-right:7px"></i>Boîtes Hebdomadaires</h3>
-            <button class="btn btn-primary btn-sm" onclick="openBoxModal(null)"><i class="fas fa-plus"></i> Nouvelle boîte</button>
+
+        <!-- Stats row -->
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:18px" id="boxes-stats-row">
+          <div class="stat-card orange">
+            <div class="stat-icon orange"><i class="fas fa-box"></i></div>
+            <div class="stat-info"><p>Total boîtes</p><h3 id="bstat-total">—</h3></div>
           </div>
-          <div class="products-grid" id="weekly-boxes-grid"></div>
+          <div class="stat-card green">
+            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info"><p>Actives</p><h3 id="bstat-active">—</h3></div>
+          </div>
+          <div class="stat-card teal">
+            <div class="stat-icon teal"><i class="fas fa-calendar-week"></i></div>
+            <div class="stat-info"><p>Hebdo</p><h3 id="bstat-weekly">—</h3></div>
+          </div>
+          <div class="stat-card purple">
+            <div class="stat-icon purple"><i class="fas fa-leaf"></i></div>
+            <div class="stat-info"><p>Saisonnières</p><h3 id="bstat-season">—</h3></div>
+          </div>
+          <div class="stat-card accent">
+            <div class="stat-icon accent"><i class="fas fa-shopping-bag"></i></div>
+            <div class="stat-info"><p>Commandes boîtes</p><h3 id="bstat-orders">—</h3></div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-icon green"><i class="fas fa-coins"></i></div>
+            <div class="stat-info"><p>Revenu boîtes</p><h3 id="bstat-revenue">—</h3></div>
+          </div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:10px">
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-primary btn-sm" id="box-tab-weekly" onclick="switchBoxTab('weekly')">
+                <i class="fas fa-calendar-week"></i> Hebdomadaires
+              </button>
+              <button class="btn btn-outline btn-sm" id="box-tab-season" onclick="switchBoxTab('season')">
+                <i class="fas fa-leaf"></i> Saisonnières
+              </button>
+              
+            </div>
+            <div style="display:flex;gap:6px;margin-left:auto">
+              <button class="btn btn-outline btn-sm" id="box-bulk-on"  onclick="bulkToggleBoxes(1)" title="Tout activer"><i class="fas fa-eye"></i></button>
+              <button class="btn btn-outline btn-sm" id="box-bulk-off" onclick="bulkToggleBoxes(0)" title="Tout désactiver"><i class="fas fa-eye-slash"></i></button>
+              <button class="btn btn-primary btn-sm" onclick="openBoxModal(null)"><i class="fas fa-plus"></i> Nouvelle boîte</button>
+            </div>
+          </div>
+
+          <!-- Weekly boxes grid -->
+          <div id="weekly-boxes-grid" class="products-grid"></div>
+
+          <!-- Season boxes grid -->
+          <div id="season-boxes-grid" class="products-grid" style="display:none"></div>
+
+        </div>
+      </div>
+
+      <!-- ═══ CLIENT DE LA SEMAINE ═══ -->
+      <div id="sec-client-of-week" class="section">
+
+        <!-- Current week card -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header" style="justify-content:space-between">
+            <h3><i class="fas fa-star" style="color:var(--accent);margin-right:7px"></i>Client de la semaine en cours</h3>
+            <button class="btn btn-primary btn-sm" onclick="openCowModal()">
+              <i class="fas fa-plus"></i> Désigner
+            </button>
+          </div>
+          <div class="card-body" id="cow-current-body" style="padding:20px">
+            <p style="color:var(--text-muted);font-size:.9rem">Chargement…</p>
+          </div>
+        </div>
+
+        <!-- History table -->
+        <div class="card">
+          <div class="card-header">
+            <h3><i class="fas fa-history" style="color:var(--text-muted);margin-right:7px"></i>Historique</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Semaine</th><th>Client</th><th>Pack attribué</th><th>Note</th><th>Statut</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="cow-history-table"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -386,7 +467,7 @@
               <label>Livraison gratuite au-dessus de (DA)</label>
               <div class="input-addon">
                 <span>DA</span>
-                <input type="number" id="set-free-delivery" value="2000" min="0">
+                <input type="number" id="set-free-delivery" value="5000" min="0">
               </div>
             </div>
             <button class="save-btn" onclick="saveSetting('delivery')"><i class="fas fa-save" style="margin-right:7px"></i>Enregistrer</button>
@@ -542,39 +623,81 @@
   </div>
 </div>
 
-<!-- WEEKLY BOX CREATE / EDIT MODAL -->
+<!-- BOX CREATE / EDIT MODAL -->
 <div class="modal-backdrop" id="box-modal">
-  <div class="modal" style="max-width:560px">
-    <h2 id="box-modal-title"><i class="fas fa-box-open" style="color:var(--accent);margin-right:8px"></i>Boîte Hebdomadaire</h2>
+  <div class="modal" style="max-width:600px">
+    <h2 id="box-modal-title"><i class="fas fa-box-open" style="color:var(--accent);margin-right:8px"></i>Nouvelle Boîte</h2>
 
+    <!-- Image + Category row -->
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
       <div style="flex-shrink:0;width:90px;height:90px;border-radius:10px;overflow:hidden;border:2px solid var(--border);background:var(--bg-card);display:flex;align-items:center;justify-content:center">
         <img id="box-img-preview" src="" alt="" style="width:100%;height:100%;object-fit:cover;display:none">
         <i id="box-img-fallback" class="fas fa-box-open" style="font-size:2rem;color:var(--text-muted)"></i>
       </div>
-      <div style="flex:1">
-        <div class="form-group" style="margin-bottom:8px">
-          <label>Image de la boîte (jpg/png/webp — max 3 Mo)</label>
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Image (jpg/png/webp — max 3 Mo)</label>
           <input type="file" id="box-img-file" accept="image/jpeg,image/png,image/webp" onchange="previewBoxImg(this)">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Catégorie <span style="color:var(--red)">*</span></label>
+          <select id="box-category" onchange="onBoxCategoryChange()" style="width:100%">
+            <option value="weekly">Hebdomadaire</option>
+            <option value="season">Saisonnière</option>
+          </select>
         </div>
       </div>
     </div>
 
-    <div class="form-group"><label>Titre de la boîte <span style="color:var(--red)">*</span></label><input type="text" id="box-title" placeholder="ex: Boîte Fraîcheur du Marché"></div>
-    <div class="form-group"><label>Description</label><textarea id="box-desc" rows="2" style="resize:vertical" placeholder="Courte description de la boîte…"></textarea></div>
+    <div class="form-group"><label>Titre <span style="color:var(--red)">*</span></label><input type="text" id="box-title" placeholder="ex: Boîte Fraîcheur du Marché"></div>
+    <div class="form-group"><label>Description</label><textarea id="box-desc" rows="2" style="resize:vertical" placeholder="Courte description…"></textarea></div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
       <div class="form-group">
         <label>Type <span style="color:var(--red)">*</span></label>
-        <select id="box-type"><!-- populated from categories --></select>
+        <select id="box-type"><!-- populated --></select>
       </div>
       <div class="form-group">
         <label>Prix (DA) <span style="color:var(--red)">*</span></label>
-        <input type="number" id="box-price" min="0" step="50" placeholder="ex: 1500">
+        <input type="number" id="box-price" min="0" step="50" placeholder="1500">
       </div>
       <div class="form-group">
-        <label>Quantité disponible</label>
-        <input type="number" id="box-qty" min="0" placeholder="ex: 20">
+        <label>Prix barré (DA)</label>
+        <input type="number" id="box-original-price" min="0" step="50" placeholder="2000">
+      </div>
+      <div class="form-group">
+        <label>Quantité dispo</label>
+        <input type="number" id="box-qty" min="0" placeholder="20">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Badge <span style="font-size:.75rem;color:var(--text-muted)">(affiché sur la carte)</span></label>
+      <input type="text" id="box-badge" placeholder="ex: Nouveau, Populaire, Fin de série…" maxlength="50">
+    </div>
+
+    <!-- Season-specific fields (hidden for weekly) -->
+    <div id="box-season-fields" style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg-card);margin-bottom:14px;display:none">
+      <p style="font-size:.78rem;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px"><i class="fas fa-leaf" style="margin-right:5px"></i>Options saisonnières</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Saison</label>
+          <select id="box-season">
+            <option value="">— Toutes saisons —</option>
+            <option value="spring">Printemps</option>
+            <option value="summer">Été</option>
+            <option value="autumn">Automne</option>
+            <option value="winter">Hiver</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Disponible à partir du</label>
+          <input type="date" id="box-available-from">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Disponible jusqu'au</label>
+          <input type="date" id="box-available-until">
+        </div>
       </div>
     </div>
 
@@ -586,18 +709,27 @@
                  style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);font-size:.82rem;box-sizing:border-box"
                  oninput="filterBoxProducts()">
         </div>
-        <div id="box-products-list" style="max-height:200px;overflow-y:auto;padding:4px 8px 8px;display:flex;flex-direction:column;gap:2px">
+        <div id="box-products-list" style="max-height:180px;overflow-y:auto;padding:4px 8px 8px;display:flex;flex-direction:column;gap:2px">
           <!-- populated dynamically -->
         </div>
       </div>
     </div>
 
-    <div class="form-group" style="display:flex;align-items:center;gap:10px">
-      <label style="margin:0">Disponible à la vente</label>
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="box-active" checked style="width:18px;height:18px;accent-color:var(--green)">
-        <span id="box-active-label" style="font-size:.82rem;color:var(--text-muted)">Active</span>
-      </label>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="margin:0;font-size:.85rem;font-weight:600">Disponible à la vente</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="box-active" checked style="width:18px;height:18px;accent-color:var(--green)">
+          <span id="box-active-label" style="font-size:.82rem;color:var(--text-muted)">Active</span>
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="margin:0;font-size:.85rem;font-weight:600">Livraison gratuite</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="box-free-delivery" style="width:18px;height:18px;accent-color:var(--teal)">
+          <span id="box-free-delivery-label" style="font-size:.82rem;color:var(--text-muted)">Non</span>
+        </label>
+      </div>
     </div>
 
     <div class="modal-actions">
@@ -607,12 +739,67 @@
   </div>
 </div>
 
-<!-- WEEKLY BOX DETAIL VIEW MODAL (admin) -->
+<!-- BOX DETAIL VIEW MODAL (admin) -->
 <div class="modal-backdrop" id="box-view-modal">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:520px">
     <div id="box-view-body"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="justify-content:space-between">
+      <div style="display:flex;gap:8px" id="box-view-actions"></div>
       <button class="btn btn-outline" onclick="closeModal('box-view-modal')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOX ORDERS MODAL -->
+<div class="modal-backdrop" id="box-orders-modal">
+  <div class="modal" style="max-width:700px">
+    <h2 id="box-orders-title"><i class="fas fa-shopping-bag" style="color:var(--green);margin-right:8px"></i>Commandes</h2>
+    <div class="table-wrap" style="max-height:400px;overflow-y:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Commande</th>
+            <th>Client</th>
+            <th>Téléphone</th>
+            <th>Wilaya</th>
+            <th>Statut</th>
+            <th>Prix</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="box-orders-table"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('box-orders-modal')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- CLIENT OF WEEK MODAL -->
+<div class="modal-backdrop" id="cow-modal">
+  <div class="modal" style="max-width:480px">
+    <h2><i class="fas fa-star" style="color:var(--accent);margin-right:8px"></i>Désigner le client de la semaine</h2>
+    <div class="form-group">
+      <label>Client <span style="color:var(--red)">*</span></label>
+      <select id="cow-user-select" style="width:100%">
+        <option value="">— Sélectionner un client —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Pack à offrir <span style="color:var(--red)">*</span></label>
+      <select id="cow-box-select" style="width:100%">
+        <option value="">— Sélectionner un pack —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Note <span style="font-size:.75rem;color:var(--text-muted)">(optionnel)</span></label>
+      <textarea id="cow-note" rows="2" placeholder="Message pour le client…" style="width:100%;resize:vertical"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('cow-modal')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveCow()"><i class="fas fa-check"></i> Confirmer</button>
     </div>
   </div>
 </div>

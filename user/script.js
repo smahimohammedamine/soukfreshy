@@ -93,7 +93,7 @@ function showPage(name) {
   window.scrollTo({ top: 0, behavior: 'instant' });
 
   if (name === 'home')     { animateHero(); animateWelcomeSection(); animateServicesSection(); animateFooterSection(); renderFeatured(); loadWeeklyBoxes(); }
-  if (name === 'shop')       loadProducts();
+  if (name === 'shop')       { loadProducts(); loadWeeklyBoxes(); }
   if (name === 'wishlist')   renderWishlist();
   if (name === 'panier')     renderPanier();
   if (name === 'checkout')   renderCheckout();
@@ -274,7 +274,7 @@ function filterCat(cat) {
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   event.currentTarget.classList.add('active');
 
-  const titles = { all: 'Tous les produits', vegetables: 'Légumes', fruits: 'Fruits', herbs: 'Herbes aromatiques' };
+  const titles = { all: 'Tous les produits', vegetables: 'Légumes', fruits: 'Fruits', herbs: 'Herbes aromatiques', packs: 'Packs hebdomadaires' };
   const titleEl = $('shop-title');
   if (titleEl) titleEl.textContent = titles[cat] || 'Produits';
 
@@ -285,6 +285,11 @@ function filterCat(cat) {
 function renderProducts() {
   const grid = $('product-grid');
   if (!grid) return;
+
+  if (currentCategory === 'packs') {
+    _renderPacksGrid(grid);
+    return;
+  }
 
   let list = currentCategory === 'all' ? PRODUCTS : PRODUCTS.filter(p => p.category === currentCategory);
   if (searchQuery) list = list.filter(p => p.name.toLowerCase().includes(searchQuery) || p.region.toLowerCase().includes(searchQuery));
@@ -329,6 +334,54 @@ function renderProducts() {
         </div>
       </div>
     `).join('');
+
+  animateCards();
+}
+
+function _renderPacksGrid(grid) {
+  const countEl = $('prod-count');
+  const boxes = _allBoxes;
+  if (countEl) countEl.textContent = `${boxes.length} pack${boxes.length !== 1 ? 's' : ''}`;
+
+  if (!boxes.length) {
+    grid.innerHTML = `<div class="col-span-full py-16 text-center text-gray-400 font-body text-sm">
+      <i class="fas fa-box-open text-3xl mb-3 block"></i>Aucun pack disponible
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = boxes.map(b => {
+    const soldOut = b.quantity === 0;
+    const inCart  = cart.some(i => i.item_type === 'box' && i.box_id === b.id);
+    const isSeasonBox = b.category === 'season';
+    return `
+    <div class="prod-card" onclick="openBoxDetail(${b.id})">
+      <div class="prod-img">
+        ${b.image ? `<img src="${b.image}" alt="${b.title}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+        <div style="width:100%;height:100%;display:${b.image ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:3rem;background:#fff8ee;"><i class="fas fa-box" style="color:#c27a00;opacity:.6"></i></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.18) 0%,transparent 50%);pointer-events:none;"></div>
+        ${b.badge ? `<span class="absolute top-2 left-2 text-[9px] font-body font-bold px-2 py-0.5 rounded-full" style="background:rgba(240,165,0,0.9);color:#fff">${b.badge}</span>` : `<span class="absolute top-2 left-2 text-[10px] font-body font-bold px-2 py-0.5 rounded-full ${soldOut ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}">${soldOut ? 'Épuisé' : isSeasonBox ? '<i class=\'fas fa-leaf\'></i> Saison' : '<i class=\'fas fa-calendar-week\'></i> Hebdo'}</span>`}
+        ${b.free_delivery ? `<span class="absolute top-2 right-2 text-[9px] font-body font-bold px-2 py-0.5 rounded-full" style="background:#ccfbf1;color:#0d9488"><i class='fas fa-truck'></i> Offerte</span>` : ''}
+        ${b.discount_pct > 0 ? `<span class="absolute bottom-2 left-2 text-[9px] font-body font-bold px-2 py-0.5 rounded-full" style="background:#e53e3e;color:#fff">-${b.discount_pct}%</span>` : ''}
+      </div>
+      <div class="prod-body">
+        <p class="prod-meta font-body"><i class="fas fa-box-open" style="color:#4dbe87;font-size:9px;"></i> ${b.box_type_label || 'Pack'}</p>
+        <h3 class="prod-title">${b.title}</h3>
+        <p style="font-size:10px;color:#9ca3af;font-family:'Nunito',sans-serif;margin-bottom:6px;">${b.products.length} produit${b.products.length !== 1 ? 's' : ''}</p>
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="prod-price">${Number(b.price).toLocaleString('fr')} DA</span>
+            ${b.original_price ? `<span class="text-gray-400 text-[10px] font-body line-through ml-1">${Number(b.original_price).toLocaleString('fr')}</span>` : ''}
+          </div>
+          <button class="quick-add ${soldOut || inCart ? 'disabled' : ''}"
+                  onclick="event.stopPropagation(); ${(!soldOut && !inCart) ? `quickAddBox(${b.id})` : ''}"
+                  title="${inCart ? 'Dans le panier' : soldOut ? 'Épuisé' : 'Ajouter au panier'}">
+            <i class="fas ${inCart ? 'fa-check' : 'fa-plus'} text-white" style="font-size:11px;"></i>
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 
   animateCards();
 }
@@ -652,10 +705,11 @@ function renderPanier() {
   const container = $('panier-container');
   if (!container) return;
 
-  const subtotal   = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const itemCount  = cart.reduce((s, i) => s + i.qty, 0);
-  const delivery   = subtotal > 0 && subtotal < 2000 ? 200 : 0;
-  const grandTotal = subtotal + delivery;
+  const subtotal          = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const itemCount         = cart.reduce((s, i) => s + i.qty, 0);
+  const hasFreeBox        = cart.some(i => i.item_type === 'box' && i.free_delivery);
+  const delivery          = (subtotal <= 0 || subtotal >= 5000 || hasFreeBox) ? 0 : 200;
+  const grandTotal        = subtotal + delivery;
 
   const countEl = $('panier-header-count');
   if (countEl) countEl.textContent = itemCount > 0 ? `(${itemCount} article${itemCount > 1 ? 's' : ''})` : '';
@@ -694,7 +748,7 @@ function renderPanier() {
             ${item.image
               ? `<img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
               : ''}
-            <div style="width:100%;height:100%;display:${item.image ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:1.9rem">📦</div>
+            <div style="width:100%;height:100%;display:${item.image ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:1.9rem"><i class="fas fa-box" style="color:#c27a00;opacity:.6"></i></div>
           </div>
           <div class="flex-1 min-w-0">
             <h3 class="font-display font-bold text-gray-900 text-[15px] leading-snug">${item.name}</h3>
@@ -705,6 +759,7 @@ function renderPanier() {
               </span>
               <span class="font-display font-bold text-base" style="color:#1e6b3c;">${item.price} DA</span>
             </div>
+            ${item.free_delivery ? `<p class="font-body text-xs font-semibold mt-1.5" style="color:#0d9488"><i class="fas fa-truck mr-1"></i>Livraison gratuite</p>` : ''}
           </div>
           <button onclick="removeBoxFromPanier(${item.box_id})" title="Supprimer"
             class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform active:scale-90"
@@ -1014,10 +1069,11 @@ function doCheckout() {
 
 function renderCheckout() {
   const session  = typeof getSession === 'function' ? getSession() : null;
-  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const delivery = subtotal > 0 && subtotal < 2000 ? 200 : 0;
-  const total    = subtotal + delivery;
-  const count    = cart.reduce((s, i) => s + i.qty, 0);
+  const subtotal   = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const hasFreeBox = cart.some(i => i.item_type === 'box' && i.free_delivery);
+  const delivery   = (subtotal <= 0 || subtotal >= 5000 || hasFreeBox) ? 0 : 200;
+  const total      = subtotal + delivery;
+  const count      = cart.reduce((s, i) => s + i.qty, 0);
 
   const countEl = $('checkout-item-count');
   if (countEl) countEl.textContent = `${count} article${count > 1 ? 's' : ''}`;
@@ -1196,23 +1252,116 @@ async function loadUserOrders() {
 window.loadUserOrders = loadUserOrders;
 
 // ─── Init ─────────────────────────────────────
-// ─── Weekly Boxes ──────────────────────────────
-let _weeklyBoxes  = [];
-let _currentBoxId = null;
+// ─── Boxes (Weekly + Season) ───────────────────
+let _weeklyBoxes     = [];
+let _seasonBoxes     = [];
+let _allBoxes        = [];
+let _currentBoxId    = null;
+let _boxesFetchedAt  = 0;
+let _currentSeasonFilter = 'all';
+let _currentSeason   = 'winter';
+const _BOXES_TTL_MS  = 5 * 60 * 1000;
 
-async function loadWeeklyBoxes() {
+const _boxTypeLabel  = { fruits: '<i class="fas fa-apple-alt"></i> Fruits', vegetables: '<i class="fas fa-carrot"></i> Légumes', mixed: '<i class="fas fa-layer-group"></i> Mixte', herbs: '<i class="fas fa-seedling"></i> Herbes' };
+const _boxTypeColor  = { fruits: '#d97a00', vegetables: '#1e6b3c', mixed: '#178a7a', herbs: '#27a163' };
+const _seasonLabel   = { spring: '<i class="fas fa-seedling"></i> Printemps', summer: '<i class="fas fa-sun"></i> Été', autumn: '<i class="fas fa-wind"></i> Automne', winter: '<i class="fas fa-snowflake"></i> Hiver' };
+const _seasonColor   = { spring: '#27a163', summer: '#d97a00', autumn: '#b85c00', winter: '#3b6da7' };
+
+async function loadWeeklyBoxes({ force = false } = {}) {
+  const age = Date.now() - _boxesFetchedAt;
+  if (!force && _allBoxes.length && age < _BOXES_TTL_MS) {
+    renderWeeklyBoxes();
+    renderSeasonBoxesUser();
+    if (currentCategory === 'packs') renderProducts();
+    return;
+  }
   try {
     const res  = await fetch('api/weekly-boxes.php');
     const data = await res.json();
-    _weeklyBoxes = data.success ? (data.boxes || []) : [];
+    _allBoxes       = data.success ? (data.boxes || []) : [];
+    _currentSeason  = data.current_season || 'winter';
+    _weeklyBoxes    = _allBoxes.filter(b => (b.category || 'weekly') === 'weekly');
+    _seasonBoxes    = _allBoxes.filter(b => b.category === 'season');
+    _boxesFetchedAt = Date.now();
+    _allBoxes.forEach(b => { if (b.image) { const i = new Image(); i.src = b.image; } });
   } catch {
-    _weeklyBoxes = [];
+    _allBoxes = _weeklyBoxes = _seasonBoxes = [];
   }
   renderWeeklyBoxes();
+  renderSeasonBoxesUser();
+  if (currentCategory === 'packs') renderProducts();
 }
 
-const _boxTypeLabel = { fruits: '🍊 Fruits', vegetables: '🥬 Légumes', mixed: '🥗 Mixte' };
-const _boxTypeColor = { fruits: '#d97a00', vegetables: '#1e6b3c', mixed: '#178a7a' };
+function filterSeasonBoxes(season) {
+  _currentSeasonFilter = season;
+  // Update tab styles
+  document.querySelectorAll('.season-filter-btn').forEach(btn => {
+    btn.style.fontWeight = '600';
+    btn.style.opacity    = '1';
+  });
+  const activeBtn = $('sfilt-' + season);
+  if (activeBtn) {
+    activeBtn.style.background  = '#1e6b3c';
+    activeBtn.style.color       = '#fff';
+  }
+  document.querySelectorAll('.season-filter-btn').forEach(btn => {
+    if (btn.id !== 'sfilt-' + season) {
+      btn.style.background = '';
+      btn.style.color      = '';
+    }
+  });
+  renderSeasonBoxesUser();
+}
+
+function _buildBoxCard(b, isWeekly) {
+  const discountBadge = b.discount_pct > 0
+    ? `<div class="absolute top-2 left-2 text-white text-xs font-body font-bold px-2 py-0.5 rounded-full" style="background:#e53e3e">-${b.discount_pct}%</div>`
+    : '';
+  const badgeBadge = b.badge
+    ? `<div class="absolute text-xs font-body font-bold px-2 py-0.5 rounded-full" style="top:${b.discount_pct > 0 ? '30px' : '8px'};left:8px;background:rgba(240,165,0,0.92);color:#fff">${b.badge}</div>`
+    : '';
+  const seasonBadge = !isWeekly && b.season
+    ? `<div class="absolute top-2 right-2 text-xs font-body font-bold px-2 py-0.5 rounded-full" style="background:rgba(103,60,180,0.85);color:#fff">${_seasonLabel[b.season] || b.season}</div>`
+    : '';
+  const soldOutOverlay = b.quantity === 0
+    ? `<div class="absolute inset-0 flex items-center justify-center" style="background:rgba(0,0,0,0.45)"><span class="text-white font-body font-bold text-sm px-3 py-1 rounded-full" style="background:rgba(229,62,62,0.9)">Épuisé</span></div>`
+    : '';
+  const qtyStyle = b.quantity === 0 ? 'color:#e53e3e' : b.quantity < 5 ? 'color:#d97a00' : 'color:#27a163';
+  const qtyText  = b.quantity === 0 ? 'Épuisé' : b.quantity < 5 ? `Plus que ${b.quantity} !` : `${b.quantity} disponibles`;
+
+  const countdownHtml = !isWeekly && b.days_remaining !== null
+    ? `<p class="font-body text-xs font-semibold mt-1" style="color:#7c3aed"><i class="fas fa-clock mr-1"></i>${b.days_remaining === 0 ? 'Dernier jour !' : `Expire dans ${b.days_remaining} jour${b.days_remaining > 1 ? 's' : ''}`}</p>`
+    : '';
+
+  const priceHtml = b.original_price
+    ? `<span class="font-display font-bold text-lg" style="color:#1e6b3c">${Number(b.price).toLocaleString('fr')} DA</span>
+       <span class="font-body text-xs line-through ml-1" style="color:#a08060">${Number(b.original_price).toLocaleString('fr')} DA</span>`
+    : `<span class="font-display font-bold text-lg" style="color:#1e6b3c">${Number(b.price).toLocaleString('fr')} DA</span>`;
+
+  return `
+    <div class="box-card group cursor-pointer rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300"
+         style="background:#fff;border:1px solid ${isWeekly ? '#f0e8d0' : '#e4f0e9'}"
+         onclick="openBoxDetail(${b.id})">
+      <div style="height:170px;overflow:hidden;position:relative;background:#f5f1eb">
+        ${b.image
+          ? `<img src="${b.image}" alt="${b.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out" loading="lazy">`
+          : `<div class="w-full h-full flex items-center justify-center text-5xl"><i class="fas fa-box" style="color:#c27a00;opacity:.6"></i></div>`}
+        ${discountBadge}${badgeBadge}${seasonBadge}${soldOutOverlay}
+      </div>
+      <div class="p-4">
+        <p class="font-body text-xs font-bold mb-1" style="color:${_boxTypeColor[b.box_type] || '#178a7a'}">${_boxTypeLabel[b.box_type] || b.box_type_label || b.box_type}</p>
+        <h3 class="font-display font-bold text-base leading-snug mb-1 line-clamp-2" style="color:#1a3320">${b.title}</h3>
+        ${countdownHtml}
+        <p class="font-body text-xs mt-1 mb-2 line-clamp-1" style="color:#8a9a8d">${b.products.length} produit${b.products.length !== 1 ? 's' : ''} inclus</p>
+        <div class="flex items-center justify-between mt-2">
+          <div>${priceHtml}</div>
+          <span class="font-body text-xs font-bold" style="${qtyStyle}">${qtyText}</span>
+        </div>
+        ${b.free_delivery ? `<p class="font-body text-xs font-bold mt-1" style="color:#0d9488"><i class="fas fa-truck mr-1"></i>Livraison gratuite</p>` : ''}
+      </div>
+    </div>
+  `;
+}
 
 function renderWeeklyBoxes() {
   const grid  = $('weekly-boxes-grid-user');
@@ -1225,95 +1374,115 @@ function renderWeeklyBoxes() {
     return;
   }
   if (empty) empty.classList.add('hidden');
-
-  grid.innerHTML = _weeklyBoxes.map(b => `
-    <div class="weekly-box-card group cursor-pointer rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300"
-         style="background:#fff;border:1px solid #f0e8d0"
-         onclick="openBoxDetail(${b.id})">
-      <div style="height:170px;overflow:hidden;position:relative;background:#f5f1eb">
-        ${b.image
-          ? `<img src="${b.image}" alt="${b.title}" style="width:100%;height:100%;object-fit:cover;transition:transform .4s ease" class="group-hover:scale-105">`
-          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:3.5rem">📦</div>`}
-        <div style="position:absolute;top:10px;left:10px;font-size:.72rem;font-weight:800;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,0.9);color:${_boxTypeColor[b.box_type] || '#1e6b3c'};box-shadow:0 1px 6px rgba(0,0,0,.12)">${b.box_type_label || _boxTypeLabel[b.box_type] || b.box_type}</div>
-        ${b.quantity < 5 && b.quantity > 0 ? `<div style="position:absolute;top:10px;right:10px;font-size:.7rem;font-weight:800;padding:3px 9px;border-radius:20px;background:#fff3d6;color:#b35c00">⚡ Dernières ${b.quantity}</div>` : ''}
-        ${b.quantity === 0 ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)"><span style="color:#fff;font-family:Nunito,sans-serif;font-weight:800;font-size:.85rem;letter-spacing:.04em">ÉPUISÉ</span></div>` : ''}
-      </div>
-      <div style="padding:14px 16px 16px">
-        <h4 style="font-family:'Playfair Display',serif;font-weight:700;font-size:1rem;color:#1a3320;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.title}</h4>
-        <ul style="margin:0 0 10px;padding-left:16px;list-style:disc;display:flex;flex-direction:column;gap:2px">
-          ${b.products.slice(0, 3).map(p => `<li style="font-family:Nunito,sans-serif;font-size:.77rem;color:#5a6b61">${p}</li>`).join('')}
-          ${b.products.length > 3 ? `<li style="font-family:Nunito,sans-serif;font-size:.75rem;color:#a08060">+ ${b.products.length - 3} autre(s)…</li>` : ''}
-        </ul>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid #f0ebe0">
-          <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:1.15rem;color:#1e6b3c">${Number(b.price).toLocaleString('fr')} DA</span>
-          <span style="font-family:Nunito,sans-serif;font-size:.75rem;font-weight:600;padding:3px 10px;border-radius:20px;background:#e8f5ee;color:#1e6b3c">Voir le détail →</span>
-        </div>
-      </div>
-    </div>
-  `).join('');
-
-  gsap.fromTo('.weekly-box-card',
+  grid.innerHTML = _weeklyBoxes.map(b => _buildBoxCard(b, true)).join('');
+  gsap.fromTo('.weekly-boxes-grid-user .box-card, #weekly-boxes-grid-user .box-card',
     { opacity: 0, y: 18, scale: 0.97 },
     { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.07, ease: 'power2.out',
       scrollTrigger: { trigger: '#weekly-boxes-section', start: 'top 82%', once: true } }
   );
 }
 
+function renderSeasonBoxesUser() {
+  const grid  = $('season-boxes-grid-user');
+  const empty = $('season-boxes-empty');
+  if (!grid) return;
+
+  let boxes = _seasonBoxes;
+  if (_currentSeasonFilter !== 'all') boxes = boxes.filter(b => b.season === _currentSeasonFilter);
+
+  if (!boxes.length) {
+    grid.innerHTML = '';
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+  if (empty) empty.classList.add('hidden');
+  grid.innerHTML = boxes.map(b => _buildBoxCard(b, false)).join('');
+  gsap.fromTo('#season-boxes-grid-user .box-card',
+    { opacity: 0, y: 18, scale: 0.97 },
+    { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.07, ease: 'power2.out',
+      scrollTrigger: { trigger: '#season-boxes-section', start: 'top 82%', once: true } }
+  );
+}
+
 function openBoxDetail(id) {
-  const b = _weeklyBoxes.find(x => x.id === id || x.id === String(id));
+  const b = _allBoxes.find(x => x.id === id || x.id === String(id));
   if (!b) return;
   _currentBoxId = b.id;
+  const isWeekly = (b.category || 'weekly') === 'weekly';
 
-  const img      = $('box-detail-img');
-  const imgFb    = $('box-detail-img-fallback');
-  const typeBadge= $('box-detail-type-badge');
-  const title    = $('box-detail-title');
-  const desc     = $('box-detail-desc');
-  const products = $('box-detail-products');
-  const price    = $('box-detail-price');
-  const qty      = $('box-detail-qty');
+  const img   = $('box-detail-img');
+  const imgFb = $('box-detail-img-fallback');
+  if (b.image) { img.src = b.image; img.style.display = 'block'; imgFb.style.display = 'none'; imgFb.classList.remove('flex'); }
+  else         { img.style.display = 'none'; imgFb.style.display = 'flex'; imgFb.classList.add('flex'); }
 
-  if (b.image) {
-    img.src                  = b.image;
-    img.style.display        = 'block';
-    imgFb.style.display      = 'none';
-    imgFb.classList.remove('flex');
-  } else {
-    img.style.display        = 'none';
-    imgFb.style.display      = 'flex';
-    imgFb.classList.add('flex');
-  }
+  // Type badge
+  const typeBadge = $('box-detail-type-badge');
+  typeBadge.textContent = b.box_type_label || _boxTypeLabel[b.box_type] || b.box_type;
+  typeBadge.style.color = _boxTypeColor[b.box_type] || '#178a7a';
 
-  typeBadge.textContent  = b.box_type_label || _boxTypeLabel[b.box_type] || b.box_type;
-  typeBadge.style.color  = _boxTypeColor[b.box_type] || '#1e6b3c';
-  title.textContent      = b.title;
-  desc.textContent       = b.description || '';
-  desc.style.display     = b.description ? '' : 'none';
-  price.textContent      = Number(b.price).toLocaleString('fr') + ' DA';
+  // Discount badge
+  const discBadge = $('box-detail-discount-badge');
+  if (b.discount_pct > 0) { discBadge.textContent = `-${b.discount_pct}%`; discBadge.classList.remove('hidden'); }
+  else discBadge.classList.add('hidden');
 
-  if (b.quantity === 0) {
-    qty.textContent   = 'Épuisé';
-    qty.style.color   = '#e53e3e';
-  } else if (b.quantity < 5) {
-    qty.textContent   = b.quantity + ' restante(s)';
-    qty.style.color   = '#d97a00';
-  } else {
-    qty.textContent   = b.quantity + ' disponibles';
-    qty.style.color   = '#1e6b3c';
-  }
+  // Season badge
+  const seasBadge = $('box-detail-season-badge');
+  if (!isWeekly && b.season) { seasBadge.textContent = _seasonLabel[b.season]; seasBadge.classList.remove('hidden'); }
+  else seasBadge.classList.add('hidden');
 
-  products.innerHTML = (b.products && b.products.length)
+  // Custom badge text
+  const badgeRow = $('box-detail-badge-row');
+  const badgeText = $('box-detail-badge-text');
+  if (b.badge) { badgeText.textContent = b.badge; badgeRow.classList.remove('hidden'); }
+  else badgeRow.classList.add('hidden');
+
+  $('box-detail-title').textContent = b.title;
+  const descEl = $('box-detail-desc');
+  descEl.textContent  = b.description || '';
+  descEl.style.display = b.description ? '' : 'none';
+
+  // Countdown for season boxes
+  const countdownRow = $('box-detail-countdown-row');
+  const countdownEl  = $('box-detail-countdown');
+  if (!isWeekly && b.days_remaining !== null) {
+    const text = b.days_remaining === 0 ? 'Dernier jour !' : `Disponible encore ${b.days_remaining} jour${b.days_remaining > 1 ? 's' : ''}`;
+    countdownEl.textContent = text;
+    countdownRow.classList.remove('hidden');
+  } else countdownRow.classList.add('hidden');
+
+  // Products
+  $('box-detail-products').innerHTML = (b.products && b.products.length)
     ? b.products.map(p => `<li style="display:flex;align-items:flex-start;gap:7px;font-family:Nunito,sans-serif;font-size:.88rem;color:#3a4a3f"><i class="fas fa-check-circle" style="color:#27a163;margin-top:2px;font-size:.72rem;flex-shrink:0"></i><span>${p}</span></li>`).join('')
     : '<li style="font-family:Nunito,sans-serif;font-size:.85rem;color:#a08060">Aucun produit listé.</li>';
+
+  // Price
+  $('box-detail-price').textContent = Number(b.price).toLocaleString('fr') + ' DA';
+  const origEl = $('box-detail-original-price');
+  if (b.original_price) { origEl.textContent = Number(b.original_price).toLocaleString('fr') + ' DA'; origEl.classList.remove('hidden'); }
+  else origEl.classList.add('hidden');
+
+  // Quantity
+  const qtyEl = $('box-detail-qty');
+  if (b.quantity === 0)      { qtyEl.textContent = 'Épuisé';               qtyEl.style.color = '#e53e3e'; }
+  else if (b.quantity < 5)   { qtyEl.textContent = b.quantity + ' restante(s)'; qtyEl.style.color = '#d97a00'; }
+  else                       { qtyEl.textContent = b.quantity + ' disponibles'; qtyEl.style.color = '#1e6b3c'; }
+
+  // Orders count
+  const ordersEl = $('box-detail-orders-count');
+  if (b.orders_count > 0) { ordersEl.textContent = b.orders_count + ' commande' + (b.orders_count > 1 ? 's' : '') + ' passée' + (b.orders_count > 1 ? 's' : ''); }
+  else ordersEl.textContent = '';
+
+  // Free delivery
+  const fdEl = $('box-detail-free-delivery');
+  if (b.free_delivery) fdEl.classList.remove('hidden'); else fdEl.classList.add('hidden');
 
   _updateBoxCartBtn(b);
 
   const backdrop = $('box-detail-backdrop');
+  const modal    = backdrop.firstElementChild;
+  gsap.killTweensOf(modal);
+  gsap.set(modal, { clearProps: 'all' });
   backdrop.classList.remove('hidden');
-  gsap.fromTo(backdrop.firstElementChild,
-    { opacity: 0, scale: 0.94, y: 14 },
-    { opacity: 1, scale: 1,    y: 0, duration: 0.28, ease: 'power2.out' }
-  );
 }
 
 function closeBoxDetail() {
@@ -1332,8 +1501,7 @@ function _updateBoxCartBtn(b) {
   if (!btn || !label) return;
   if (!b || b.quantity === 0) {
     btn.disabled = true;
-    btn.style.background = '#9ca3af';
-    btn.style.boxShadow  = 'none';
+    btn.style.background = '#9ca3af'; btn.style.boxShadow = 'none';
     label.textContent    = 'Épuisé';
     return;
   }
@@ -1355,17 +1523,31 @@ function _updateBoxCartBtn(b) {
 }
 
 function addBoxToCart() {
-  const b = _weeklyBoxes.find(x => x.id === _currentBoxId || x.id === String(_currentBoxId));
+  const b = _allBoxes.find(x => x.id === _currentBoxId || x.id === String(_currentBoxId));
   if (!b || b.quantity === 0) { toast('Cette boîte est épuisée.'); return; }
   showLoginModal(() => {
     if (cart.some(i => i.item_type === 'box' && i.box_id === b.id)) {
       closeBoxDetail(); showPage('panier'); return;
     }
-    cart.push({ box_id: b.id, item_type: 'box', name: b.title, price: b.price, qty: 1, unit: 'boîte', image: b.image || '' });
+    cart.push({ box_id: b.id, item_type: 'box', name: b.title, price: b.price, qty: 1, unit: 'boîte', image: b.image || '', free_delivery: !!b.free_delivery });
     syncBoxCartItem(b.id, 1);
     updateBadges();
     _updateBoxCartBtn(b);
-    toast(`📦 ${b.title} ajoutée au panier !`);
+    toast(`${b.title} ajoutée au panier !`);
+  });
+}
+
+function quickAddBox(boxId) {
+  const b = _allBoxes.find(x => x.id === boxId || x.id === String(boxId));
+  if (!b || b.quantity === 0) return;
+  showLoginModal(() => {
+    if (cart.some(i => i.item_type === 'box' && i.box_id === b.id)) {
+      showPage('panier'); return;
+    }
+    cart.push({ box_id: b.id, item_type: 'box', name: b.title, price: b.price, qty: 1, unit: 'boîte', image: b.image || '', free_delivery: !!b.free_delivery });
+    syncBoxCartItem(b.id, 1);
+    updateBadges();
+    toast(`${b.title} ajoutée au panier !`);
   });
 }
 

@@ -47,7 +47,7 @@ try {
 
     // Load box cart items
     $stmtB = $db->prepare(
-        'SELECT ci.box_id, wb.title AS name, wb.price, wb.quantity AS stock
+        'SELECT ci.box_id, wb.title AS name, wb.price, wb.quantity AS stock, wb.free_delivery
          FROM cart_items ci
          JOIN weekly_boxes wb ON wb.id = ci.box_id
          WHERE ci.user_id = :uid AND ci.box_id IS NOT NULL AND wb.is_active = 1'
@@ -80,7 +80,7 @@ try {
         $settings[$row['setting_key']] = $row['setting_value'];
     }
     $deliveryFee    = (float) ($settings['delivery_fee']          ?? 200);
-    $freeMinimum    = (float) ($settings['free_delivery_minimum'] ?? 2000);
+    $freeMinimum    = (float) ($settings['free_delivery_minimum'] ?? 5000);
     $commissionRate = (float) ($settings['commission_rate']       ?? 10);
     $serviceFee     = (float) ($settings['service_fee']           ?? 50);
 
@@ -92,7 +92,8 @@ try {
     foreach ($boxItems as $box) {
         $subtotal += (float) $box['price'];
     }
-    $actualDelivery = $subtotal >= $freeMinimum ? 0.00 : $deliveryFee;
+    $hasFreeDeliveryBox = !empty(array_filter($boxItems, fn($b) => !empty($b['free_delivery'])));
+    $actualDelivery = ($subtotal >= $freeMinimum || $hasFreeDeliveryBox) ? 0.00 : $deliveryFee;
     $commissionAmt  = round($subtotal * $commissionRate / 100, 2);
     $total          = $subtotal + $actualDelivery + $serviceFee;
 
@@ -153,13 +154,13 @@ try {
            (:oid, :bid, :pname, :price, "boîte", 1, :price2)'
     );
     $decStmt = $db->prepare(
-        'UPDATE weekly_boxes SET quantity = GREATEST(0, quantity - 1) WHERE id = :id'
+        'UPDATE weekly_boxes SET quantity = GREATEST(0, quantity - 1), orders_count = orders_count + 1 WHERE id = :id'
     );
     foreach ($boxItems as $box) {
         $bStmt->execute([
             ':oid'    => $orderId,
             ':bid'    => (int)   $box['box_id'],
-            ':pname'  => '📦 ' . $box['name'],
+            ':pname'  => $box['name'],
             ':price'  => (float) $box['price'],
             ':price2' => (float) $box['price'],
         ]);

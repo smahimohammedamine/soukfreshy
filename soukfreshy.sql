@@ -273,7 +273,8 @@ CREATE TABLE IF NOT EXISTS weekly_boxes (
   quantity    INT UNSIGNED  NOT NULL DEFAULT 0,
   products    TEXT          NOT NULL DEFAULT '[]',  -- JSON array of product name strings
   box_type    VARCHAR(100)  NOT NULL DEFAULT 'mixed',
-  is_active   TINYINT(1)    NOT NULL DEFAULT 1,
+  is_active      TINYINT(1)    NOT NULL DEFAULT 1,
+  free_delivery  TINYINT(1)    NOT NULL DEFAULT 0,
   created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -281,3 +282,65 @@ CREATE TABLE IF NOT EXISTS weekly_boxes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ================================================================
+--  SCHEMA UPGRADES — Weekly + Season Boxes (run once)
+-- ================================================================
+
+-- ── Upgrade weekly_boxes: new columns for category / season / dates / badges / stats ──
+ALTER TABLE weekly_boxes
+  ADD COLUMN IF NOT EXISTS category        ENUM('weekly','season') NOT NULL DEFAULT 'weekly'              AFTER id,
+  ADD COLUMN IF NOT EXISTS original_price  DECIMAL(10,2)           NULL                                   AFTER price,
+  ADD COLUMN IF NOT EXISTS season          ENUM('spring','summer','autumn','winter') NULL                  AFTER box_type,
+  ADD COLUMN IF NOT EXISTS available_from  DATE                    NULL                                   AFTER season,
+  ADD COLUMN IF NOT EXISTS available_until DATE                    NULL                                   AFTER available_from,
+  ADD COLUMN IF NOT EXISTS badge           VARCHAR(100)            NULL                                   AFTER free_delivery,
+  ADD COLUMN IF NOT EXISTS orders_count    INT UNSIGNED            NOT NULL DEFAULT 0;
+
+-- ── Upgrade cart_items: make product_id nullable, add box_id ──
+ALTER TABLE cart_items
+  MODIFY COLUMN product_id INT UNSIGNED NULL DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS box_id INT UNSIGNED NULL DEFAULT NULL AFTER product_id,
+  ADD CONSTRAINT IF NOT EXISTS fk_cart_box FOREIGN KEY (box_id) REFERENCES weekly_boxes(id) ON DELETE CASCADE;
+
+-- ── Upgrade order_items: add box_id column ──
+ALTER TABLE order_items
+  ADD COLUMN IF NOT EXISTS box_id INT UNSIGNED NULL DEFAULT NULL AFTER product_id,
+  ADD CONSTRAINT IF NOT EXISTS fk_items_box FOREIGN KEY (box_id) REFERENCES weekly_boxes(id) ON DELETE SET NULL;
+
+-- ── Box subscriptions (recurring weekly delivery) ──
+CREATE TABLE IF NOT EXISTS box_subscriptions (
+  id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  box_id           INT UNSIGNED NOT NULL,
+  user_id          INT UNSIGNED NOT NULL,
+  delivery_wilaya  VARCHAR(100) NOT NULL DEFAULT '',
+  delivery_commune VARCHAR(100) NOT NULL DEFAULT '',
+  delivery_address TEXT,
+  frequency        ENUM('weekly','biweekly') NOT NULL DEFAULT 'weekly',
+  status           ENUM('active','paused','cancelled') NOT NULL DEFAULT 'active',
+  next_delivery    DATE NULL,
+  created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_sub_user_box (user_id, box_id),
+  KEY idx_sub_box  (box_id),
+  KEY idx_sub_user (user_id),
+  CONSTRAINT fk_sub_box  FOREIGN KEY (box_id)  REFERENCES weekly_boxes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sub_user FOREIGN KEY (user_id) REFERENCES users(id)        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── Client of the week (admin assigns a free pack to a chosen client) ──
+CREATE TABLE IF NOT EXISTS client_of_week (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    INT UNSIGNED NOT NULL,
+  box_id     INT UNSIGNED NOT NULL,
+  week_start DATE         NOT NULL,
+  note       TEXT,
+  status     ENUM('active','delivered','cancelled') NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_cow_user (user_id),
+  KEY idx_cow_week (week_start),
+  CONSTRAINT fk_cow_user FOREIGN KEY (user_id) REFERENCES users(id)         ON DELETE CASCADE,
+  CONSTRAINT fk_cow_box  FOREIGN KEY (box_id)  REFERENCES weekly_boxes(id)  ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -33,6 +33,7 @@ try {
         'SELECT NULL AS id, ci.qty, ci.box_id, "box" AS item_type,
                 wb.title AS name, wb.price, "boîte" AS unit,
                 wb.image, "available" AS availability, wb.quantity AS stock,
+                wb.free_delivery,
                 NULL AS category, NULL AS region
          FROM cart_items ci
          JOIN weekly_boxes wb ON wb.id = ci.box_id
@@ -51,7 +52,8 @@ try {
         if ($row['item_type'] === 'product') {
             $row['id'] = (int) $row['id'];
         } else {
-            $row['box_id'] = (int) $row['box_id'];
+            $row['box_id']       = (int)  $row['box_id'];
+            $row['free_delivery'] = (bool) ($row['free_delivery'] ?? false);
         }
     }
     unset($row);

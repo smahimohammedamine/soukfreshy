@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════
    STATE
 ═══════════════════════════════════════════ */
-let settings     = { commission:10, delivery:200, freeDelivery:2000, service:50, serviceMode:'fixed' };
+let settings     = { commission:10, delivery:200, freeDelivery:5000, service:50, serviceMode:'fixed' };
 let orders       = [];
 let products     = [];
 let notifications= [];
@@ -17,6 +17,7 @@ let categories       = [];
 let editCategoryId   = null;
 let weeklyBoxes      = [];
 let editBoxId        = null;
+let cowHistory       = [];
 
 const weekDays = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
 
@@ -36,6 +37,7 @@ const API = {
   admins:        '../api/admin/admins.php',
   categories:    '../api/admin/categories.php',
   weeklyBoxes:   '../api/admin/weekly-boxes.php',
+  clientOfWeek:  '../api/admin/client-of-week.php',
 };
 
 async function apiFetch(url, opts = {}) {
@@ -105,7 +107,7 @@ async function initApp() {
   document.getElementById('page-date').textContent =
     now.toLocaleDateString('fr-DZ', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
 
-  const [dashRes, ordersRes, productsRes, usersRes, notifsRes, settingsRes, adminsRes, catsRes, boxesRes] = await Promise.all([
+  const [dashRes, ordersRes, productsRes, usersRes, notifsRes, settingsRes, adminsRes, catsRes, boxesRes, cowRes] = await Promise.all([
     apiFetch(API.dashboard),
     apiFetch(API.orders),
     apiFetch(API.products),
@@ -115,6 +117,7 @@ async function initApp() {
     apiFetch(API.admins),
     apiFetch(API.categories),
     apiFetch(API.weeklyBoxes),
+    apiFetch(API.clientOfWeek + '?action=history'),
   ]);
 
   /* Settings */
@@ -122,7 +125,7 @@ async function initApp() {
     const s = settingsRes.settings;
     settings.commission   = parseFloat(s.commission_rate)       || 10;
     settings.delivery     = parseFloat(s.delivery_fee)          || 200;
-    settings.freeDelivery = parseFloat(s.free_delivery_minimum) || 2000;
+    settings.freeDelivery = parseFloat(s.free_delivery_minimum) || 5000;
     settings.service      = parseFloat(s.service_fee)           || 50;
     settings.serviceMode  = s.service_fee_mode                  || 'fixed';
     document.getElementById('set-commission').value    = settings.commission;
@@ -185,11 +188,20 @@ async function initApp() {
     renderCategories();
   }
 
-  /* Weekly Boxes */
+  /* Boxes (Weekly + Season) */
   if (boxesRes.success) {
     weeklyBoxes = boxesRes.boxes;
     renderWeeklyBoxes();
+    renderSeasonBoxes();
+    loadBoxStats();
   }
+
+  /* Client of the week */
+  if (cowRes.success) {
+    cowHistory = cowRes.history;
+    renderCowHistory();
+  }
+  loadCowCurrent();
 
   /* Notifications */
   if (notifsRes.success) {
@@ -225,6 +237,7 @@ const sectionTitles = {
   notifications:'Notifications', settings:'Paramètres',
   admins:'Administrateurs', categories:'Catégories',
   'weekly-boxes':'Boîtes Hebdomadaires',
+  'client-of-week':'Client de la semaine',
 };
 
 function showSection(name, el) {
@@ -427,7 +440,7 @@ async function advanceOrderId(id) {
 /* ═══════════════════════════════════════════
    PRODUCTS
 ═══════════════════════════════════════════ */
-const catEmoji = { legumes:'🥬', fruits:'🍊', feuilles:'🌿' };
+const catEmoji = { legumes:'<i class="fas fa-carrot"></i>', fruits:'<i class="fas fa-apple-alt"></i>', feuilles:'<i class="fas fa-seedling"></i>' };
 
 function renderProducts(list) {
   const grid = document.getElementById('products-grid');
@@ -440,7 +453,7 @@ function renderProducts(list) {
       <div class="product-card-img">
         <img src="${p.img || ''}" alt="${p.name}"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <span class="img-fallback">${p.emoji || catEmoji[p.cat] || '🌿'}</span>
+        <span class="img-fallback">${catEmoji[p.cat] || '<i class="fas fa-leaf"></i>'}</span>
       </div>
       <div class="product-card-body">
         <h4>${p.name}</h4>
@@ -501,7 +514,7 @@ function openImgModal(id) {
   } else {
     preview.style.display = 'none';
     fallback.style.display = 'flex';
-    fallback.textContent = p.emoji || '🌿';
+    fallback.innerHTML = catEmoji[p.cat] || '<i class="fas fa-leaf"></i>';
   }
   openModal('img-modal');
 }
@@ -610,7 +623,7 @@ async function deleteProduct(id) {
    CUSTOMERS
 ═══════════════════════════════════════════ */
 function renderConsumers() {
-  const medals   = ['🥇','🥈','🥉'];
+  const medals   = ['<i class="fas fa-medal" style="color:#f0a500"></i>','<i class="fas fa-medal" style="color:#9ca3af"></i>','<i class="fas fa-medal" style="color:#b45309"></i>'];
   const maxTotal = consumers.length > 0 ? consumers[0].total : 1;
   const tbody    = document.getElementById('top-customers-table');
   if (!consumers.length) {
@@ -724,7 +737,7 @@ async function toggleUser(id, role) {
 /* ═══════════════════════════════════════════
    CATEGORIES
 ═══════════════════════════════════════════ */
-const catEmojis = { vegetables:'🥬', fruits:'🍊', herbs:'🌿' };
+const catEmojis = { vegetables:'<i class="fas fa-carrot"></i>', fruits:'<i class="fas fa-apple-alt"></i>', herbs:'<i class="fas fa-seedling"></i>' };
 
 function renderCategories() {
   const tbody = document.getElementById('categories-table');
@@ -737,7 +750,7 @@ function renderCategories() {
     <tr>
       <td style="font-weight:700;color:var(--text-muted)">#${c.id}</td>
       <td><code style="background:var(--bg-card);padding:2px 7px;border-radius:5px;font-size:.8rem">${c.slug}</code></td>
-      <td style="font-weight:700">${catEmojis[c.slug] || '🏷️'} ${c.name_fr}</td>
+      <td style="font-weight:700">${catEmojis[c.slug] || '<i class="fas fa-tag"></i>'} ${c.name_fr}</td>
       <td style="text-align:center">
         <span style="font-weight:700;color:${c.product_count > 0 ? 'var(--green-dark)' : 'var(--text-muted)'}">${c.product_count}</span>
       </td>
@@ -1013,11 +1026,13 @@ function showToast(msg) {
 }
 
 /* ═══════════════════════════════════════════
-   WEEKLY BOXES
+   BOXES  (Weekly + Season)
 ═══════════════════════════════════════════ */
+let activeBoxTab = 'weekly'; // 'weekly' | 'season'
+
 const _boxCatColors = ['var(--orange)','var(--green)','var(--teal)','var(--purple)','var(--accent)'];
 function getBoxTypeLabel(slug) {
-  if (slug === 'mixed') return '🥗 Mixte';
+  if (slug === 'mixed') return '<i class="fas fa-layer-group"></i> Mixte';
   const cat = categories.find(c => c.slug === slug);
   return cat ? cat.name_fr : slug;
 }
@@ -1026,40 +1041,139 @@ function getBoxTypeColor(slug) {
   return _boxCatColors[Math.max(idx, 0) % _boxCatColors.length];
 }
 
-function renderWeeklyBoxes() {
-  const grid = document.getElementById('weekly-boxes-grid');
-  if (!grid) return;
-  if (!weeklyBoxes.length) {
-    grid.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i><p>Aucune boîte hebdomadaire</p></div>';
-    return;
-  }
-  grid.innerHTML = weeklyBoxes.map(b => `
+const _seasonLabels = { spring:'<i class="fas fa-seedling"></i> Printemps', summer:'<i class="fas fa-sun"></i> Été', autumn:'<i class="fas fa-wind"></i> Automne', winter:'<i class="fas fa-snowflake"></i> Hiver' };
+const _seasonColors = { spring:'#27a163', summer:'#d97a00', autumn:'#b85c00', winter:'#3b6da7' };
+
+function switchBoxTab(tab) {
+  activeBoxTab = tab;
+  document.getElementById('box-tab-weekly').className = tab === 'weekly' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  document.getElementById('box-tab-season').className = tab === 'season' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  document.getElementById('weekly-boxes-grid').style.display = tab === 'weekly' ? '' : 'none';
+  document.getElementById('season-boxes-grid').style.display = tab === 'season' ? '' : 'none';
+}
+
+async function loadBoxStats() {
+  try {
+    const res = await apiFetch(API.weeklyBoxes + '?action=stats');
+    if (!res.success) return;
+    const s = res.stats;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('bstat-total',   s.total);
+    set('bstat-active',  s.active);
+    set('bstat-weekly',  s.total_weekly);
+    set('bstat-season',  s.total_season);
+    set('bstat-orders',  s.total_orders);
+    set('bstat-revenue', formatDA(s.total_revenue));
+    const badge = document.getElementById('boxes-badge');
+    if (badge && s.out_of_stock > 0) {
+      badge.textContent     = s.out_of_stock + ' épuisée' + (s.out_of_stock > 1 ? 's' : '');
+      badge.style.display   = '';
+    }
+  } catch {}
+}
+
+async function bulkToggleBoxes(state) {
+  const label = state ? 'Activer toutes les boîtes' : 'Désactiver toutes les boîtes';
+  const tab   = activeBoxTab;
+  if (!confirm(label + (tab ? ` (${tab === 'weekly' ? 'hebdomadaires' : 'saisonnières'})` : ' (toutes)') + ' ?')) return;
+  const res = await apiFetch(API.weeklyBoxes, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'bulk_toggle', is_active: state, category: tab }),
+  });
+  if (res.success) {
+    const fresh = await apiFetch(API.weeklyBoxes);
+    if (fresh.success) { weeklyBoxes = fresh.boxes; renderWeeklyBoxes(); renderSeasonBoxes(); }
+    loadBoxStats();
+    showToast(state ? 'Toutes les boîtes activées.' : 'Toutes les boîtes désactivées.');
+  } else showToast(res.message || 'Erreur.');
+}
+
+function _renderBoxCard(b) {
+  const discountHtml = b.discount_pct > 0
+    ? `<span style="font-size:.7rem;font-weight:800;background:var(--red);color:#fff;border-radius:20px;padding:1px 7px">-${b.discount_pct}%</span>`
+    : '';
+  const badgeHtml = b.badge
+    ? `<span style="position:absolute;top:8px;right:8px;background:var(--accent);color:#fff;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em">${b.badge}</span>`
+    : '';
+  const inactiveHtml = !b.is_active
+    ? `<div style="position:absolute;top:8px;left:8px;background:var(--red);color:#fff;font-size:.65rem;font-weight:800;padding:2px 7px;border-radius:20px;text-transform:uppercase">Inactif</div>`
+    : '';
+  const seasonHtml = b.category === 'season' && b.season
+    ? `<p style="font-size:.7rem;font-weight:700;color:${_seasonColors[b.season] || '#888'}">${_seasonLabels[b.season] || b.season}</p>`
+    : '';
+  const datesHtml = b.category === 'season' && (b.available_from || b.available_until)
+    ? `<p style="font-size:.68rem;color:var(--text-muted)">${b.available_from || '?'} → ${b.available_until || '?'}</p>`
+    : '';
+  const ordersHtml = `<span style="font-size:.72rem;color:var(--text-muted)"><i class="fas fa-shopping-bag" style="margin-right:2px"></i>${b.orders_count || 0} cmd</span>`;
+
+  return `
     <div class="product-card" id="box-card-${b.id}" style="opacity:${b.is_active ? 1 : 0.55}">
       <div class="product-card-img">
         <img src="${b.image || ''}" alt="${b.title}"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <span class="img-fallback">📦</span>
-        ${!b.is_active ? '<div style="position:absolute;top:8px;left:8px;background:var(--red);color:#fff;font-size:.65rem;font-weight:800;padding:2px 7px;border-radius:20px;text-transform:uppercase">Inactif</div>' : ''}
+        <span class="img-fallback"><i class="fas fa-box"></i></span>
+        ${inactiveHtml}${badgeHtml}
       </div>
       <div class="product-card-body">
         <h4 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${b.title}">${b.title}</h4>
         <p style="font-size:.75rem;color:${getBoxTypeColor(b.box_type)};font-weight:700">${getBoxTypeLabel(b.box_type)}</p>
+        ${seasonHtml}${datesHtml}
         <p style="font-size:.73rem;color:var(--text-muted)"><i class="fas fa-list-ul" style="margin-right:3px"></i>${b.products.length} produit${b.products.length !== 1 ? 's' : ''}</p>
+        ${b.free_delivery ? '<p style="font-size:.7rem;font-weight:700;color:var(--teal)"><i class="fas fa-truck" style="margin-right:3px"></i>Livraison gratuite</p>' : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-          <span class="product-price">${formatDA(b.price)}</span>
+          <div>
+            <span class="product-price">${formatDA(b.price)}</span>
+            ${b.original_price ? `<span style="font-size:.72rem;color:var(--text-muted);text-decoration:line-through;margin-left:4px">${formatDA(b.original_price)}</span>` : ''}
+            ${discountHtml}
+          </div>
           <span style="font-size:.75rem;color:${b.quantity < 5 ? 'var(--red)' : 'var(--green)'};font-weight:700">${b.quantity} dispo</span>
         </div>
-        <div class="product-actions" style="margin-top:8px">
-          <button class="btn btn-outline btn-sm btn-icon" onclick="viewBox(${b.id})" title="Voir détail"><i class="fas fa-eye"></i></button>
-          <button class="btn btn-outline btn-sm" style="flex:1" onclick="openBoxModal(${b.id})"><i class="fas fa-edit"></i> Modifier</button>
-          <button class="btn ${b.is_active ? 'btn-danger' : 'btn-primary'} btn-sm btn-icon" onclick="toggleBox(${b.id})" title="${b.is_active ? 'Désactiver' : 'Activer'}">
-            <i class="fas ${b.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i>
-          </button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteBox(${b.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">${ordersHtml}</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-outline btn-sm btn-icon" onclick="viewBox(${b.id})" title="Voir détail"><i class="fas fa-eye"></i></button>
+            <button class="btn btn-outline btn-sm" style="flex:1" onclick="openBoxModal(${b.id})"><i class="fas fa-edit"></i> Modifier</button>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-outline btn-sm" style="flex:1" onclick="duplicateBox(${b.id})" title="Dupliquer"><i class="fas fa-copy"></i> Dupliquer</button>
+            <button class="btn ${b.is_active ? 'btn-warning' : 'btn-primary'} btn-sm btn-icon" onclick="toggleBox(${b.id})" title="${b.is_active ? 'Désactiver' : 'Activer'}">
+              <i class="fas ${b.is_active ? 'fa-eye-slash' : 'fa-eye'}"></i>
+            </button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="deleteBox(${b.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+          </div>
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+}
+
+function renderWeeklyBoxes() {
+  const grid = document.getElementById('weekly-boxes-grid');
+  if (!grid) return;
+  const boxes = weeklyBoxes.filter(b => (b.category || 'weekly') === 'weekly');
+  if (!boxes.length) {
+    grid.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-week"></i><p>Aucune boîte hebdomadaire</p></div>';
+    return;
+  }
+  grid.innerHTML = boxes.map(_renderBoxCard).join('');
+}
+
+function renderSeasonBoxes() {
+  const grid = document.getElementById('season-boxes-grid');
+  if (!grid) return;
+  const boxes = weeklyBoxes.filter(b => b.category === 'season');
+  if (!boxes.length) {
+    grid.innerHTML = '<div class="empty-state"><i class="fas fa-leaf"></i><p>Aucune boîte saisonnière</p></div>';
+    return;
+  }
+  grid.innerHTML = boxes.map(_renderBoxCard).join('');
+}
+
+function onBoxCategoryChange() {
+  const cat     = document.getElementById('box-category').value;
+  const sfEl    = document.getElementById('box-season-fields');
+  sfEl.style.display = cat === 'season' ? '' : 'none';
 }
 
 function openBoxModal(id) {
@@ -1069,14 +1183,27 @@ function openBoxModal(id) {
   document.getElementById('box-modal-title').innerHTML =
     `<i class="fas fa-box-open" style="color:var(--accent);margin-right:8px"></i>${b ? 'Modifier — ' + b.title : 'Nouvelle boîte'}`;
 
-  document.getElementById('box-title').value    = b ? b.title : '';
-  document.getElementById('box-desc').value     = b ? (b.description || '') : '';
-  document.getElementById('box-price').value    = b ? b.price : '';
-  document.getElementById('box-qty').value      = b ? b.quantity : '';
+  // Category
+  const catSel = document.getElementById('box-category');
+  catSel.value = b ? (b.category || 'weekly') : 'weekly';
+  onBoxCategoryChange();
+
+  document.getElementById('box-title').value          = b ? b.title : '';
+  document.getElementById('box-desc').value           = b ? (b.description || '') : '';
+  document.getElementById('box-price').value          = b ? b.price : '';
+  document.getElementById('box-original-price').value = b && b.original_price ? b.original_price : '';
+  document.getElementById('box-qty').value            = b ? b.quantity : '';
+  document.getElementById('box-badge').value          = b ? (b.badge || '') : '';
+
+  // Season-specific
+  document.getElementById('box-season').value          = b ? (b.season || '') : '';
+  document.getElementById('box-available-from').value  = b ? (b.available_from || '') : '';
+  document.getElementById('box-available-until').value = b ? (b.available_until || '') : '';
+
   // Populate type select from categories
   const typeSelect = document.getElementById('box-type');
   typeSelect.innerHTML = categories.map(c => `<option value="${c.slug}">${c.name_fr}</option>`).join('')
-    + '<option value="mixed">🥗 Mixte</option>';
+    + '<option value="mixed">Mixte</option>';
   const defaultType = categories[0]?.slug || 'mixed';
   typeSelect.value = b ? (b.box_type || defaultType) : defaultType;
 
@@ -1093,8 +1220,11 @@ function openBoxModal(id) {
         <span style="font-size:.73rem;color:var(--text-muted);flex-shrink:0">${p.price} DA/kg</span>
       </label>`).join('')
     : '<p style="text-align:center;color:var(--text-muted);padding:10px 0;font-size:.82rem">Aucun produit disponible</p>';
+
   document.getElementById('box-active').checked = b ? b.is_active : true;
   document.getElementById('box-active-label').textContent = (b && !b.is_active) ? 'Inactive' : 'Active';
+  document.getElementById('box-free-delivery').checked = b ? !!b.free_delivery : false;
+  document.getElementById('box-free-delivery-label').textContent = (b && b.free_delivery) ? 'Oui' : 'Non';
   document.getElementById('box-img-file').value = '';
 
   const preview  = document.getElementById('box-img-preview');
@@ -1133,28 +1263,41 @@ function filterBoxProducts() {
 document.getElementById('box-active').addEventListener('change', function () {
   document.getElementById('box-active-label').textContent = this.checked ? 'Active' : 'Inactive';
 });
+document.getElementById('box-free-delivery').addEventListener('change', function () {
+  document.getElementById('box-free-delivery-label').textContent = this.checked ? 'Oui' : 'Non';
+});
 
 async function saveBox() {
-  const title = document.getElementById('box-title').value.trim();
-  const price = parseFloat(document.getElementById('box-price').value) || 0;
-  if (!title || price <= 0) {
-    showToast('Titre et prix sont requis.');
-    return;
-  }
+  const title    = document.getElementById('box-title').value.trim();
+  const price    = parseFloat(document.getElementById('box-price').value) || 0;
+  const category = document.getElementById('box-category').value;
+  if (!title || price <= 0) { showToast('Titre et prix sont requis.'); return; }
 
-  const productsArr = [...document.querySelectorAll('#box-products-list .box-product-cb:checked')].map(cb => cb.value);
-  const isActive    = document.getElementById('box-active').checked ? 1 : 0;
+  const origPrice    = document.getElementById('box-original-price').value;
+  const productsArr  = [...document.querySelectorAll('#box-products-list .box-product-cb:checked')].map(cb => cb.value);
+  const isActive     = document.getElementById('box-active').checked ? 1 : 0;
+  const freeDelivery = document.getElementById('box-free-delivery').checked ? 1 : 0;
 
   const form = new FormData();
-  form.append('action',      editBoxId ? 'update' : 'create');
+  form.append('action',         editBoxId ? 'update' : 'create');
   if (editBoxId) form.append('id', editBoxId);
-  form.append('title',       title);
-  form.append('description', document.getElementById('box-desc').value.trim());
-  form.append('price',       price);
-  form.append('quantity',    parseInt(document.getElementById('box-qty').value, 10) || 0);
-  form.append('box_type',    document.getElementById('box-type').value);
-  form.append('products',    JSON.stringify(productsArr));
-  form.append('is_active',   isActive);
+  form.append('category',       category);
+  form.append('title',          title);
+  form.append('description',    document.getElementById('box-desc').value.trim());
+  form.append('price',          price);
+  form.append('original_price', origPrice ? parseFloat(origPrice) : '');
+  form.append('quantity',       parseInt(document.getElementById('box-qty').value, 10) || 0);
+  form.append('box_type',       document.getElementById('box-type').value);
+  form.append('badge',          document.getElementById('box-badge').value.trim());
+  form.append('products',       JSON.stringify(productsArr));
+  form.append('is_active',      isActive);
+  form.append('free_delivery',  freeDelivery);
+
+  if (category === 'season') {
+    form.append('season',          document.getElementById('box-season').value);
+    form.append('available_from',  document.getElementById('box-available-from').value);
+    form.append('available_until', document.getElementById('box-available-until').value);
+  }
 
   const file = document.getElementById('box-img-file').files[0];
   if (file) form.append('image', file);
@@ -1162,16 +1305,13 @@ async function saveBox() {
   let res;
   try {
     res = await apiFetch(API.weeklyBoxes, { method: 'POST', body: form });
-  } catch {
-    showToast('Erreur réseau.');
-    return;
-  }
+  } catch { showToast('Erreur réseau.'); return; }
 
   if (res.success) {
     closeModal('box-modal');
-    // Reload list from server to stay in sync
     const fresh = await apiFetch(API.weeklyBoxes);
-    if (fresh.success) { weeklyBoxes = fresh.boxes; renderWeeklyBoxes(); }
+    if (fresh.success) { weeklyBoxes = fresh.boxes; renderWeeklyBoxes(); renderSeasonBoxes(); }
+    loadBoxStats();
     showToast(editBoxId ? 'Boîte mise à jour.' : 'Boîte créée avec succès.');
   } else {
     showToast(res.message || 'Erreur lors de l\'enregistrement.');
@@ -1182,62 +1322,280 @@ async function deleteBox(id) {
   const b = weeklyBoxes.find(x => x.id === id);
   if (!b) return;
   if (!confirm(`Supprimer la boîte "${b.title}" ?`)) return;
-
   const res = await apiFetch(API.weeklyBoxes, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'delete', id }),
   });
-
   if (res.success) {
     weeklyBoxes = weeklyBoxes.filter(x => x.id !== id);
-    renderWeeklyBoxes();
+    renderWeeklyBoxes(); renderSeasonBoxes();
+    loadBoxStats();
     showToast('Boîte supprimée.');
-  } else {
-    showToast(res.message || 'Erreur lors de la suppression.');
-  }
+  } else showToast(res.message || 'Erreur lors de la suppression.');
 }
 
 async function toggleBox(id) {
   const res = await apiFetch(API.weeklyBoxes, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'toggle', id }),
   });
-
   if (res.success) {
     const b = weeklyBoxes.find(x => x.id === id);
     if (b) b.is_active = res.is_active;
-    renderWeeklyBoxes();
+    renderWeeklyBoxes(); renderSeasonBoxes();
+    loadBoxStats();
     showToast(res.is_active ? 'Boîte activée.' : 'Boîte désactivée.');
-  } else {
-    showToast(res.message || 'Erreur.');
-  }
+  } else showToast(res.message || 'Erreur.');
+}
+
+async function duplicateBox(id) {
+  const b = weeklyBoxes.find(x => x.id === id);
+  if (!b) return;
+  const res = await apiFetch(API.weeklyBoxes, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'duplicate', id }),
+  });
+  if (res.success) {
+    weeklyBoxes.push(res.box);
+    renderWeeklyBoxes(); renderSeasonBoxes();
+    loadBoxStats();
+    showToast('Boîte dupliquée (inactive).');
+  } else showToast(res.message || 'Erreur.');
 }
 
 function viewBox(id) {
   const b = weeklyBoxes.find(x => x.id === id);
   if (!b) return;
-  const statusBadgeHtml = b.is_active
+  const statusBadge = b.is_active
     ? '<span class="badge badge-active" style="background:#e3f5eb;color:var(--green-dark)"><span class="dot dot-green"></span>Active</span>'
     : '<span class="badge badge-cancelled"><span class="dot dot-red"></span>Inactive</span>';
+  const catBadge = b.category === 'season'
+    ? '<span style="font-size:.75rem;font-weight:700;color:var(--purple);background:#f2ebff;padding:2px 8px;border-radius:20px"><i class="fas fa-leaf" style="margin-right:3px"></i>Saisonnière</span>'
+    : '<span style="font-size:.75rem;font-weight:700;color:var(--teal);background:#e6f7f7;padding:2px 8px;border-radius:20px"><i class="fas fa-calendar-week" style="margin-right:3px"></i>Hebdomadaire</span>';
+
+  const discountRow = b.original_price
+    ? `<div class="order-detail-row"><span>Prix barré</span><strong style="text-decoration:line-through;color:var(--text-muted)">${formatDA(b.original_price)}</strong></div>
+       <div class="order-detail-row"><span>Réduction</span><strong style="color:var(--red)">${b.discount_pct || 0}%</strong></div>`
+    : '';
+  const seasonRow = b.category === 'season' ? `
+    ${b.season ? `<div class="order-detail-row"><span>Saison</span><strong style="color:${_seasonColors[b.season]}">${_seasonLabels[b.season]}</strong></div>` : ''}
+    ${b.available_from ? `<div class="order-detail-row"><span>Disponible du</span><strong>${b.available_from} au ${b.available_until || '?'}</strong></div>` : ''}
+  ` : '';
+  const badgeRow = b.badge ? `<div class="order-detail-row"><span>Badge</span><strong style="color:var(--accent)">${b.badge}</strong></div>` : '';
 
   document.getElementById('box-view-body').innerHTML = `
     ${b.image ? `<img src="${b.image}" alt="${b.title}" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:14px">` : ''}
-    <h2 style="margin-bottom:4px;font-size:1.15rem">${b.title}</h2>
+    <h2 style="margin-bottom:6px;font-size:1.15rem">${b.title}</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <span style="font-size:.8rem;font-weight:700;color:${getBoxTypeColor(b.box_type)}">${getBoxTypeLabel(b.box_type)}</span>
-      ${statusBadgeHtml}
+      ${catBadge} ${statusBadge}
     </div>
     ${b.description ? `<p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px">${b.description}</p>` : ''}
     <div class="order-detail-row"><span>Prix</span><strong style="color:var(--green-dark);font-size:1.05rem">${formatDA(b.price)}</strong></div>
-    <div class="order-detail-row"><span>Quantité disponible</span><strong>${b.quantity}</strong></div>
+    ${discountRow}
+    <div class="order-detail-row"><span>Quantité disponible</span><strong style="color:${b.quantity < 5 ? 'var(--red)' : 'var(--green)'}">${b.quantity}</strong></div>
+    <div class="order-detail-row"><span>Commandes passées</span><strong>${b.orders_count || 0}</strong></div>
+    <div class="order-detail-row"><span>Livraison</span><strong style="color:${b.free_delivery ? 'var(--teal)' : 'var(--text-muted)'}">${b.free_delivery ? '<i class="fas fa-truck" style="margin-right:3px"></i>Gratuite' : 'Standard'}</strong></div>
+    ${seasonRow}${badgeRow}
     <div style="margin-top:12px">
-      <p style="font-weight:700;font-size:.83rem;color:var(--text-muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.04em">Produits inclus</p>
+      <p style="font-weight:700;font-size:.83rem;color:var(--text-muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.04em">Produits inclus (${b.products.length})</p>
       <ul style="list-style:disc;padding-left:18px;display:flex;flex-direction:column;gap:4px">
         ${b.products.length ? b.products.map(p => `<li style="font-size:.88rem">${p}</li>`).join('') : '<li style="color:var(--text-muted)">Aucun produit listé</li>'}
       </ul>
     </div>
   `;
+
+  // Action buttons
+  const actionsDiv = document.getElementById('box-view-actions');
+  actionsDiv.innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="openBoxOrders(${b.id})">
+      <i class="fas fa-shopping-bag"></i> Commandes
+    </button>
+    <button class="btn btn-outline btn-sm" onclick="closeModal('box-view-modal');openBoxModal(${b.id})">
+      <i class="fas fa-edit"></i> Modifier
+    </button>
+  `;
   openModal('box-view-modal');
 }
+
+async function openBoxOrders(boxId) {
+  const b = weeklyBoxes.find(x => x.id === boxId);
+  closeModal('box-view-modal');
+  document.getElementById('box-orders-title').innerHTML =
+    `<i class="fas fa-shopping-bag" style="color:var(--green);margin-right:8px"></i>Commandes — ${b ? b.title : ''}`;
+  const tbody = document.getElementById('box-orders-table');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+  openModal('box-orders-modal');
+
+  try {
+    const res = await apiFetch(API.weeklyBoxes + `?action=get_orders&id=${boxId}`);
+    if (!res.success || !res.orders.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted)">Aucune commande pour cette boîte.</td></tr>';
+      return;
+    }
+    const statusColors = { new:'var(--orange)', prep:'var(--teal)', delivered:'var(--green)', cancelled:'var(--red)' };
+    const statusLabels = { new:'Nouveau', prep:'En préparation', delivered:'Livré', cancelled:'Annulé' };
+    tbody.innerHTML = res.orders.map(o => `
+      <tr>
+        <td><strong>${o.order_number}</strong></td>
+        <td>${o.consumer_name}</td>
+        <td>${o.consumer_phone || '—'}</td>
+        <td>${o.wilaya}</td>
+        <td><span style="font-weight:700;color:${statusColors[o.status] || '#888'}">${statusLabels[o.status] || o.status}</span></td>
+        <td>${formatDA(o.unit_price)}</td>
+        <td style="font-size:.78rem">${(o.created_at || '').slice(0,10)}</td>
+      </tr>
+    `).join('');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">Erreur de chargement.</td></tr>';
+  }
+}
+
+/* ═══════════════════════════════════════════
+   CLIENT DE LA SEMAINE
+═══════════════════════════════════════════ */
+const cowStatusLabels = { active:'Désigné', delivered:'Pack livré', cancelled:'Annulé' };
+const cowStatusColors = { active:'var(--accent)', delivered:'var(--green)', cancelled:'var(--red)' };
+
+async function loadCowCurrent() {
+  const body = document.getElementById('cow-current-body');
+  if (!body) return;
+  try {
+    const res = await apiFetch(API.clientOfWeek + '?action=current');
+    if (!res.success) { body.innerHTML = '<p style="color:var(--red)">Erreur de chargement.</p>'; return; }
+
+    if (!res.current) {
+      body.innerHTML = `
+        <div style="text-align:center;padding:24px 0;color:var(--text-muted)">
+          <i class="fas fa-star" style="font-size:2rem;color:#e0e0e0;margin-bottom:10px;display:block"></i>
+          <p>Aucun client désigné pour la semaine du <strong>${formatWeekStart(res.week_start)}</strong>.</p>
+          <p style="font-size:.82rem;margin-top:4px">Cliquez sur <em>Désigner</em> pour choisir un client.</p>
+        </div>`;
+      return;
+    }
+
+    const c = res.current;
+    const statusColor = cowStatusColors[c.status] || '#888';
+    const statusLabel = cowStatusLabels[c.status] || c.status;
+    body.innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap">
+        ${c.box_image ? `<img src="${c.box_image}" alt="${c.box_title}" style="width:90px;height:90px;object-fit:cover;border-radius:10px;flex-shrink:0">` : ''}
+        <div style="flex:1;min-width:200px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-size:1.05rem;font-weight:700">${c.user_name}</span>
+            <span style="font-size:.78rem;font-weight:700;padding:3px 10px;border-radius:20px;background:${statusColor}20;color:${statusColor}">${statusLabel}</span>
+          </div>
+          <p style="font-size:.84rem;color:var(--text-muted);margin-bottom:4px"><i class="fas fa-phone" style="width:14px"></i> ${c.user_phone || '—'}</p>
+          <p style="font-size:.84rem;color:var(--text-muted);margin-bottom:8px"><i class="fas fa-box" style="width:14px"></i> Pack : <strong style="color:var(--green-dark)">${c.box_title}</strong> — ${formatDA(c.box_price)}</p>
+          ${c.note ? `<p style="font-size:.83rem;font-style:italic;color:var(--text-muted);background:var(--bg);padding:6px 10px;border-radius:6px;border-left:3px solid var(--accent)">"${c.note}"</p>` : ''}
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            ${c.status === 'active' ? `<button class="btn btn-outline btn-sm" onclick="updateCowStatus(${c.id},'delivered')"><i class="fas fa-check"></i> Marquer livré</button>` : ''}
+            ${c.status !== 'cancelled' ? `<button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="updateCowStatus(${c.id},'cancelled')"><i class="fas fa-times"></i> Annuler</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+  } catch {
+    body.innerHTML = '<p style="color:var(--red)">Erreur de chargement.</p>';
+  }
+}
+
+function renderCowHistory() {
+  const tbody = document.getElementById('cow-history-table');
+  if (!tbody) return;
+  if (!cowHistory.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">Aucun historique.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = cowHistory.map(c => {
+    const sc = cowStatusColors[c.status] || '#888';
+    const sl = cowStatusLabels[c.status] || c.status;
+    return `<tr>
+      <td style="font-size:.82rem">${formatWeekStart(c.week_start)}</td>
+      <td><strong>${c.user_name}</strong><br><span style="font-size:.78rem;color:var(--text-muted)">${c.user_phone || ''}</span></td>
+      <td>${c.box_title}<br><span style="font-size:.78rem;color:var(--green-dark)">${formatDA(c.box_price)}</span></td>
+      <td style="font-size:.82rem;color:var(--text-muted);max-width:160px">${c.note ? `<em>${c.note}</em>` : '—'}</td>
+      <td><span style="font-size:.78rem;font-weight:700;padding:2px 9px;border-radius:20px;background:${sc}20;color:${sc}">${sl}</span></td>
+      <td>
+        <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="deleteCowEntry(${c.id})" title="Supprimer"><i class="fas fa-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openCowModal() {
+  // Populate consumers
+  const uSel = document.getElementById('cow-user-select');
+  uSel.innerHTML = '<option value="">— Sélectionner un client —</option>' +
+    consumers.map(u => `<option value="${u.id}">${u.name}${u.phone ? ' · ' + u.phone : ''}</option>`).join('');
+
+  // Populate active boxes
+  const bSel = document.getElementById('cow-box-select');
+  const activeBoxes = weeklyBoxes.filter(b => b.is_active);
+  bSel.innerHTML = '<option value="">— Sélectionner un pack —</option>' +
+    activeBoxes.map(b => `<option value="${b.id}">${b.title} — ${formatDA(b.price)}</option>`).join('');
+
+  document.getElementById('cow-note').value = '';
+  openModal('cow-modal');
+}
+
+async function saveCow() {
+  const userId = parseInt(document.getElementById('cow-user-select').value);
+  const boxId  = parseInt(document.getElementById('cow-box-select').value);
+  const note   = document.getElementById('cow-note').value.trim();
+
+  if (!userId || !boxId) { showToast('Veuillez sélectionner un client et un pack.'); return; }
+
+  const res = await apiFetch(API.clientOfWeek, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'assign', user_id: userId, box_id: boxId, note }),
+  });
+
+  if (res.success) {
+    closeModal('cow-modal');
+    // Refresh current display and prepend to history
+    await loadCowCurrent();
+    const histRes = await apiFetch(API.clientOfWeek + '?action=history');
+    if (histRes.success) { cowHistory = histRes.history; renderCowHistory(); }
+    showToast('Client de la semaine désigné !');
+  } else {
+    showToast(res.message || 'Erreur lors de l\'enregistrement.');
+  }
+}
+
+async function updateCowStatus(id, status) {
+  const res = await apiFetch(API.clientOfWeek, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'update_status', id, status }),
+  });
+  if (res.success) {
+    await loadCowCurrent();
+    const histRes = await apiFetch(API.clientOfWeek + '?action=history');
+    if (histRes.success) { cowHistory = histRes.history; renderCowHistory(); }
+    showToast('Statut mis à jour.');
+  } else {
+    showToast('Erreur lors de la mise à jour.');
+  }
+}
+
+async function deleteCowEntry(id) {
+  if (!confirm('Supprimer cet enregistrement ?')) return;
+  const res = await apiFetch(API.clientOfWeek, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'delete', id }),
+  });
+  if (res.success) {
+    cowHistory = cowHistory.filter(c => c.id !== id);
+    renderCowHistory();
+    showToast('Enregistrement supprimé.');
+  }
+}
+
+function formatWeekStart(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('fr-DZ', { day:'numeric', month:'long', year:'numeric' });
+}
+

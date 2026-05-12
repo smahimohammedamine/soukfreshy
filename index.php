@@ -232,7 +232,7 @@
       </div>
 
       <!-- Category cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
         <!-- Vegetables card -->
         <div class="sec-block group relative rounded-[20px] overflow-hidden cursor-pointer" onclick="goShop('vegetables')" style="box-shadow:0 14px 34px rgba(30,107,60,0.18), 0 4px 14px rgba(15,58,31,0.12);">
           <div class="relative h-56 md:h-60 overflow-hidden">
@@ -262,6 +262,21 @@
             </div>
           </div>
         </div>
+
+        <!-- Packs card -->
+        <div class="sec-block group relative rounded-[20px] overflow-hidden cursor-pointer" onclick="goShop('packs')" style="box-shadow:0 14px 34px rgba(194,122,0,0.22), 0 4px 14px rgba(100,60,0,0.14);">
+          <div class="relative h-56 md:h-60 overflow-hidden">
+            <img src="https://images.unsplash.com/photo-1506617564039-2f3b650b7010?w=900&q=80" alt="Packs" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+            <div class="absolute inset-0" style="background:linear-gradient(120deg, rgba(80,40,0,0.92) 0%, rgba(80,40,0,0.55) 52%, rgba(80,40,0,0.18) 100%);"></div>
+            <div class="absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-body font-bold uppercase tracking-widest" style="background:rgba(240,165,0,0.22); color:#f0c15f; border:1px solid rgba(240,165,0,0.35);">Offre spéciale</div>
+            <div class="absolute inset-0 flex flex-col justify-end p-6">
+              <h3 class="text-white text-[1.8rem] font-display font-bold leading-[1.05] tracking-[-0.02em]">Packs<br>fraîcheur</h3>
+              <div class="mt-3 inline-flex items-center gap-2 text-white/95 font-body font-semibold text-[13px]">
+                Découvrir <i class="fas fa-arrow-right text-[10px] transition-transform duration-200 group-hover:translate-x-1"></i>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -282,52 +297,112 @@
     </div>
   </section>
 
-  <!-- ══ WEEKLY BOXES ══ -->
-  <section id="weekly-boxes-section" class="py-14 px-4 md:px-8" style="background:linear-gradient(160deg,#fff8ee 0%,#fffdf8 60%,#f0faf4 100%);border-top:1px solid #f0e8d0;border-bottom:1px solid #e4f0e9;">
+  <!-- ══ BOXES SECTION (Weekly + Season) ══ -->
+  <section id="weekly-boxes-section" class="py-14 px-4 md:px-8" style="background:linear-gradient(160deg,#fff8ee 0%,#fffdf8 55%,#f0faf4 100%);border-top:1px solid #f0e8d0;border-bottom:1px solid #d4f0e4;">
     <div class="max-w-[1100px] mx-auto">
-      <div class="text-center mb-9">
-        <span class="inline-block mb-2 px-3 py-1 rounded-full font-body font-semibold text-[11px] uppercase tracking-[0.16em]" style="color:#c27a00;background:#fff3d6;">Offres spéciales</span>
-        <h2 class="text-3xl font-display font-bold leading-tight mb-3" style="color:#2c1a00;">Boîtes <em style="color:#f0a500;">Fraîcheur</em> de la semaine</h2>
-        <p class="font-body text-sm max-w-[50ch] mx-auto leading-relaxed" style="color:#6b5a3e;">Composées par notre équipe à partir des surplus de récolte. Fraîcheur garantie, prix réduits.</p>
+
+      <!-- Section header -->
+      <div class="text-center mb-8">
+        <span class="inline-block mb-2 px-3 py-1 rounded-full font-body font-semibold text-[11px] uppercase tracking-[0.16em]" style="color:#c27a00;background:#fff3d6;">Nos Boîtes</span>
+        <h2 class="text-3xl font-display font-bold leading-tight mb-3" style="color:#2c1a00;">Boîtes <em style="color:#f0a500;">Fraîcheur</em></h2>
+        <p class="font-body text-sm max-w-[52ch] mx-auto leading-relaxed" style="color:#6b5a3e;">Boîtes de la semaine et éditions saisonnières — fraîcheur garantie, prix réduits.</p>
       </div>
-      <div id="weekly-boxes-grid-user" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
-      <div id="weekly-boxes-empty" class="hidden text-center py-10 font-body text-sm" style="color:#a08060;">
-        <i class="fas fa-box-open text-3xl mb-3 block" style="color:#f0a500;opacity:.55"></i>Aucune boîte disponible pour le moment.
+
+      <!-- Tab switcher -->
+      <div class="flex justify-center mb-8">
+        <div class="inline-flex items-center gap-1 p-1 rounded-2xl" style="background:#f5efe0;border:1px solid #e8d8b0;">
+          <button id="tab-weekly" onclick="switchBoxTab('weekly')"
+            class="px-5 py-2 rounded-xl font-body font-semibold text-sm transition-all duration-200"
+            style="background:#f0a500;color:#fff;box-shadow:0 3px 10px rgba(240,165,0,0.35);">
+            <i class="fas fa-box mr-1.5"></i>De la semaine
+          </button>
+          <button id="tab-season" onclick="switchBoxTab('season')"
+            class="px-5 py-2 rounded-xl font-body font-semibold text-sm transition-all duration-200"
+            style="background:transparent;color:#8b6914;">
+            <i class="fas fa-leaf mr-1.5"></i>Saisonnières
+          </button>
+        </div>
       </div>
+
+      <!-- Weekly panel -->
+      <div id="panel-weekly">
+        <div id="weekly-boxes-grid-user" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        <div id="weekly-boxes-empty" class="hidden text-center py-10 font-body text-sm" style="color:#a08060;">
+          <i class="fas fa-box-open text-3xl mb-3 block" style="color:#f0a500;opacity:.55"></i>Aucune boîte disponible pour le moment.
+        </div>
+      </div>
+
+      <!-- Season panel -->
+      <div id="panel-season" class="hidden">
+        <div id="season-filter-tabs" class="flex justify-center gap-2 flex-wrap mb-8">
+          <button onclick="filterSeasonBoxes('all')"    id="sfilt-all"    class="season-filter-btn active-sfilt px-4 py-1.5 rounded-full font-body font-semibold text-xs transition-all" style="background:#1e6b3c;color:#fff">Toutes</button>
+          <button onclick="filterSeasonBoxes('spring')" id="sfilt-spring" class="season-filter-btn px-4 py-1.5 rounded-full font-body font-semibold text-xs transition-all" style="background:#f0f7f0;color:#27a163"><i class="fas fa-seedling mr-1"></i>Printemps</button>
+          <button onclick="filterSeasonBoxes('summer')" id="sfilt-summer" class="season-filter-btn px-4 py-1.5 rounded-full font-body font-semibold text-xs transition-all" style="background:#fff8e8;color:#d97a00"><i class="fas fa-sun mr-1"></i>Été</button>
+          <button onclick="filterSeasonBoxes('autumn')" id="sfilt-autumn" class="season-filter-btn px-4 py-1.5 rounded-full font-body font-semibold text-xs transition-all" style="background:#fff3ee;color:#b85c00"><i class="fas fa-wind mr-1"></i>Automne</button>
+          <button onclick="filterSeasonBoxes('winter')" id="sfilt-winter" class="season-filter-btn px-4 py-1.5 rounded-full font-body font-semibold text-xs transition-all" style="background:#eef3ff;color:#3b6da7"><i class="fas fa-snowflake mr-1"></i>Hiver</button>
+        </div>
+        <div id="season-boxes-grid-user" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        <div id="season-boxes-empty" class="hidden text-center py-10 font-body text-sm" style="color:#a08060;">
+          <i class="fas fa-leaf text-3xl mb-3 block" style="color:#27a163;opacity:.55"></i>Aucune boîte saisonnière disponible actuellement.
+        </div>
+      </div>
+
     </div>
   </section>
 
-  <!-- WEEKLY BOX DETAIL MODAL -->
-  <div id="box-detail-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center p-4 hidden" style="background:rgba(10,30,15,0.6);backdrop-filter:blur(3px)" onclick="if(event.target===this)closeBoxDetail()">
-    <div class="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl" style="background:#fff;max-height:90vh;display:flex;flex-direction:column">
+  <!-- BOX DETAIL MODAL (weekly + season) -->
+  <div id="box-detail-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center p-4 hidden" style="background:rgba(10,30,15,0.6)" onclick="if(event.target===this)closeBoxDetail()">
+    <div class="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl" style="background:#fff;max-height:92vh;display:flex;flex-direction:column">
       <div id="box-detail-img-wrap" style="flex-shrink:0;height:200px;overflow:hidden;background:#f5f1eb;position:relative">
         <img id="box-detail-img" src="" alt="" class="w-full h-full object-cover">
-        <div id="box-detail-img-fallback" class="absolute inset-0 hidden items-center justify-center text-5xl">📦</div>
-        <div id="box-detail-type-badge" class="absolute top-3 left-3 text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(255,255,255,0.88);box-shadow:0 1px 6px rgba(0,0,0,.15)"></div>
+        <div id="box-detail-img-fallback" class="absolute inset-0 hidden items-center justify-center text-5xl"><i class="fas fa-box" style="color:#c27a00;opacity:.6"></i></div>
+        <!-- badges row -->
+        <div class="absolute top-3 left-3 flex gap-2">
+          <div id="box-detail-type-badge" class="text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(255,255,255,0.88);box-shadow:0 1px 6px rgba(0,0,0,.15)"></div>
+          <div id="box-detail-discount-badge" class="hidden text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:#e53e3e;color:#fff"></div>
+          <div id="box-detail-season-badge" class="hidden text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(103,60,180,0.85);color:#fff"></div>
+        </div>
         <button onclick="closeBoxDetail()" class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm" style="background:rgba(0,0,0,.35);color:#fff">
           <i class="fas fa-times"></i>
         </button>
       </div>
-      <div class="px-5 pt-4 pb-5 overflow-y-auto flex-1">
+      <div class="px-5 pt-4 pb-5 overflow-y-auto flex-1" style="background:#fff">
+        <!-- badge text -->
+        <div id="box-detail-badge-row" class="hidden mb-2">
+          <span id="box-detail-badge-text" class="inline-block text-xs font-body font-bold px-3 py-1 rounded-full" style="background:#fff3d6;color:#c27a00"></span>
+        </div>
         <h3 id="box-detail-title" class="font-display font-bold text-xl mb-1" style="color:#1a3320"></h3>
-        <p id="box-detail-desc" class="font-body text-sm mb-4" style="color:#6b7a72"></p>
+        <p id="box-detail-desc" class="font-body text-sm mb-3" style="color:#6b7a72"></p>
+
+        <!-- Season countdown (only for season boxes) -->
+        <div id="box-detail-countdown-row" class="hidden mb-3 px-3 py-2 rounded-xl font-body text-xs font-semibold" style="background:#f0faf4;color:#1e6b3c;border:1px solid #d4f0e4">
+          <i class="fas fa-clock mr-1"></i>
+          <span id="box-detail-countdown"></span>
+        </div>
+
         <div class="mb-4">
           <p class="font-body text-xs font-semibold uppercase tracking-widest mb-2" style="color:#a08060">Produits inclus</p>
           <ul id="box-detail-products" class="space-y-1.5"></ul>
         </div>
-        <div class="flex items-center justify-between pt-3" style="border-top:1px solid #eee">
+        <div class="flex items-center justify-between pt-3 mb-4" style="border-top:1px solid #eee">
           <div>
-            <p class="font-body text-xs" style="color:#a08060">Prix de la boîte</p>
-            <p id="box-detail-price" class="font-display font-bold text-2xl" style="color:#1e6b3c"></p>
+            <p class="font-body text-xs" style="color:#a08060">Prix</p>
+            <div class="flex items-baseline gap-2">
+              <p id="box-detail-price" class="font-display font-bold text-2xl" style="color:#1e6b3c"></p>
+              <p id="box-detail-original-price" class="hidden font-body text-sm line-through" style="color:#a08060"></p>
+            </div>
+            <p id="box-detail-free-delivery" class="font-body text-xs font-bold hidden" style="color:#0d9488;margin-top:3px"><i class="fas fa-truck mr-1"></i>Livraison gratuite</p>
           </div>
           <div class="text-right">
             <p class="font-body text-xs" style="color:#a08060">Disponibilité</p>
             <p id="box-detail-qty" class="font-body text-sm font-bold"></p>
+            <p id="box-detail-orders-count" class="font-body text-xs" style="color:#a08060;margin-top:2px"></p>
           </div>
         </div>
+
         <button id="box-cart-btn" onclick="addBoxToCart()"
-          class="w-full mt-4 py-3 rounded-xl font-body font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all duration-150 active:scale-95"
-          style="background:linear-gradient(135deg,#1e6b3c,#27a163); box-shadow:0 6px 20px rgba(30,107,60,0.3);">
+          class="w-full py-3 rounded-xl font-body font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all duration-150 active:scale-95"
+          style="background:linear-gradient(135deg,#1e6b3c,#27a163);box-shadow:0 6px 20px rgba(30,107,60,0.3);">
           <i class="fas fa-shopping-cart text-sm"></i>
           <span id="box-cart-btn-label">Ajouter au panier</span>
         </button>
@@ -446,6 +521,7 @@
         <button onclick="filterCat('vegetables')" class="filter-btn"><i class="fas fa-carrot text-xs mr-1"></i> Légumes</button>
         <button onclick="filterCat('fruits')" class="filter-btn"><i class="fas fa-apple-alt text-xs mr-1"></i> Fruits</button>
         <button onclick="filterCat('herbs')" class="filter-btn"><i class="fas fa-spa text-xs mr-1"></i> Herbes</button>
+        <button onclick="filterCat('packs')" class="filter-btn"><i class="fas fa-box-open text-xs mr-1"></i> Packs</button>
       </div>
     </div>
     <div class="flex items-center justify-between mb-5 mt-1">
@@ -877,6 +953,20 @@ window.__SF_SESSION = <?php
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeVideoModal();
   });
+  function switchBoxTab(tab) {
+    const isWeekly = tab === 'weekly';
+    document.getElementById('panel-weekly').classList.toggle('hidden', !isWeekly);
+    document.getElementById('panel-season').classList.toggle('hidden', isWeekly);
+    const tw = document.getElementById('tab-weekly');
+    const ts = document.getElementById('tab-season');
+    if (isWeekly) {
+      tw.style.cssText = 'background:#f0a500;color:#fff;box-shadow:0 3px 10px rgba(240,165,0,0.35);';
+      ts.style.cssText = 'background:transparent;color:#8b6914;';
+    } else {
+      ts.style.cssText = 'background:#1e6b3c;color:#fff;box-shadow:0 3px 10px rgba(30,107,60,0.3);';
+      tw.style.cssText = 'background:transparent;color:#8b6914;';
+    }
+  }
   function toggleWelcomeVideo() {
     const video = document.getElementById('welcome-video');
     const icon  = document.getElementById('welcome-video-icon');
