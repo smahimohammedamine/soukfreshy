@@ -37,6 +37,32 @@ try {
             exit;
         }
 
+        if ($action === 'ranking') {
+            $monday = date('Y-m-d', strtotime('monday this week'));
+            $sunday = date('Y-m-d', strtotime('sunday this week'));
+            $rows = $db->prepare("
+                SELECT u.id, u.full_name AS name, u.phone, u.wilaya,
+                       COUNT(o.id)  AS order_count,
+                       SUM(o.total) AS total_spent,
+                       MAX(DATE_FORMAT(o.created_at,'%d/%m %H:%i')) AS last_order_at
+                FROM orders o
+                JOIN users u ON u.id = o.consumer_id
+                WHERE DATE(o.created_at) BETWEEN ? AND ?
+                  AND o.status != 'cancelled'
+                GROUP BY u.id
+                ORDER BY order_count DESC, total_spent DESC
+                LIMIT 10
+            ");
+            $rows->execute([$monday, $sunday]);
+            $ranking = $rows->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($ranking as &$r) {
+                $r['total_spent'] = (float)$r['total_spent'];
+                $r['order_count'] = (int)$r['order_count'];
+            }
+            echo json_encode(['success' => true, 'ranking' => $ranking, 'week_start' => $monday]);
+            exit;
+        }
+
         // history — all entries newest first
         $rows = $db->query("
             SELECT c.*, u.full_name AS user_name, u.phone AS user_phone,

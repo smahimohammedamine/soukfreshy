@@ -11,7 +11,7 @@
 <body>
 
 <!-- ═══════════ LOGIN ═══════════ -->
-<div id="login-screen">
+<div id="login-screen" style="display:none;">
   <div class="login-card">
     <div class="login-logo">
       <img src="../images/logo 1.jpeg" alt="SoukFreshy" onerror="this.style.display='none'">
@@ -183,7 +183,7 @@
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th>#</th><th>Agriculteur</th><th>Wilaya</th><th>Produits</th><th>Montant</th><th>Statut</th><th>Date</th>
+                <th>#</th><th>Client</th><th>Agriculteur(s)</th><th>Wilaya</th><th>Produits</th><th>Montant</th><th>Statut</th><th>Date</th>
               </tr></thead>
               <tbody id="dash-orders-table"></tbody>
             </table>
@@ -194,7 +194,7 @@
       <!-- ═══ ORDERS ═══ -->
       <div id="sec-orders" class="section">
         <div class="filters">
-          <input class="search-input" type="text" placeholder="Rechercher agriculteur, wilaya…" oninput="filterOrders()">
+          <input class="search-input" type="text" placeholder="Rechercher client, agriculteur, wilaya…" oninput="filterOrders()">
           <select class="filter-select" id="order-status-filter" onchange="filterOrders()">
             <option value="">Tous les statuts</option>
             <option value="new">Nouvelle</option>
@@ -208,12 +208,17 @@
         <div class="card">
           <div class="card-header">
             <h3><i class="fas fa-shopping-basket" style="color:var(--green);margin-right:7px"></i>Toutes les commandes</h3>
-            <span id="orders-count" style="font-size:.8rem;color:var(--text-muted);font-weight:700;"></span>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span id="orders-count" style="font-size:.8rem;color:var(--text-muted);font-weight:700;"></span>
+              <button id="orders-refresh-btn" class="btn btn-outline btn-sm" onclick="refreshOrders()">
+                <i class="fas fa-rotate-right"></i> Actualiser
+              </button>
+            </div>
           </div>
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th>#ID</th><th>Agriculteur</th><th>Wilaya / Commune</th><th>Produits</th><th>Sous-total</th><th>Commission</th><th>Statut</th><th>Date</th><th>Actions</th>
+                <th>#ID</th><th>Client</th><th>Agriculteur(s)</th><th>Wilaya / Commune</th><th>Produits</th><th>Sous-total</th><th>Commission</th><th>Statut</th><th>Date / Heure</th><th>Actions</th>
               </tr></thead>
               <tbody id="orders-table"></tbody>
             </table>
@@ -301,27 +306,27 @@
         <div class="card" style="margin-bottom:20px">
           <div class="card-header" style="justify-content:space-between">
             <h3><i class="fas fa-star" style="color:var(--accent);margin-right:7px"></i>Client de la semaine en cours</h3>
-            <button class="btn btn-primary btn-sm" onclick="openCowModal()">
-              <i class="fas fa-plus"></i> Désigner
-            </button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="openCowHistoryModal()">
+                <i class="fas fa-history"></i> Historique
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="openCowModal()">
+                <i class="fas fa-plus"></i> Désigner
+              </button>
+            </div>
           </div>
           <div class="card-body" id="cow-current-body" style="padding:20px">
             <p style="color:var(--text-muted);font-size:.9rem">Chargement…</p>
           </div>
         </div>
 
-        <!-- History table -->
+        <!-- Weekly ranking card -->
         <div class="card">
           <div class="card-header">
-            <h3><i class="fas fa-history" style="color:var(--text-muted);margin-right:7px"></i>Historique</h3>
+            <h3><i class="fas fa-trophy" style="color:var(--accent);margin-right:7px"></i>Classement clients — Semaine en cours</h3>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr>
-                <th>Semaine</th><th>Client</th><th>Pack attribué</th><th>Note</th><th>Statut</th><th>Actions</th>
-              </tr></thead>
-              <tbody id="cow-history-table"></tbody>
-            </table>
+          <div id="cow-ranking-body" style="padding:0 4px 8px">
+            <p style="color:var(--text-muted);font-size:.9rem;padding:20px">Chargement…</p>
           </div>
         </div>
       </div>
@@ -373,7 +378,7 @@
           <div class="card-header"><h3><i class="fas fa-tractor" style="color:var(--purple);margin-right:7px"></i>Agriculteurs actifs</h3></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Agriculteur</th><th>Wilaya</th><th>Produits</th><th>Statut</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Agriculteur</th><th>Wilaya / Commune</th><th>Produits</th><th>Statut</th><th>Actions</th></tr></thead>
               <tbody id="farmers-table"></tbody>
             </table>
           </div>
@@ -441,6 +446,43 @@
       <!-- ═══ SETTINGS ═══ -->
       <div id="sec-settings" class="section">
         <div class="settings-grid">
+          <div class="settings-card" style="grid-column:1/-1">
+            <h3><i class="fas fa-palette"></i> Apparence du site</h3>
+
+            <div class="form-group">
+              <label>Logo du site</label>
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <img id="set-logo-preview" src="../images/logo 1.jpeg" alt="logo"
+                     style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid var(--border,#e5e7eb);background:#f3f4f6">
+                <div style="flex:1;min-width:220px">
+                  <input type="url" id="set-logo-url" placeholder="https://… (URL de l'image)" oninput="previewLogo(this.value)">
+                  <input type="file" id="set-logo-file" accept="image/*" style="margin-top:8px" onchange="onLogoFile(this)">
+                </div>
+              </div>
+            </div>
+
+            <hr style="border:none;border-top:1px solid var(--border,#eef0f3);margin:16px 0">
+
+            <div class="form-group">
+              <label>Section « Bienvenue » — type de média</label>
+              <select id="set-welcome-type" onchange="renderWelcomePreview()">
+                <option value="video">Vidéo</option>
+                <option value="image">Image</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Média « Bienvenue »</label>
+              <input type="url" id="set-welcome-url" placeholder="https://… (URL de l'image ou de la vidéo)" oninput="renderWelcomePreview()">
+              <input type="file" id="set-welcome-file" accept="image/*,video/*" style="margin-top:8px" onchange="onWelcomeFile(this)">
+              <div id="set-welcome-preview" style="margin-top:12px;border-radius:12px;overflow:hidden;max-width:360px"></div>
+            </div>
+            <p style="font-size:.77rem;color:var(--text-muted);margin-top:-4px;margin-bottom:12px">
+              Choisissez un fichier <em>ou</em> collez une URL. Le nom « SoukFreshy » reste inchangé.
+              Les vidéos volumineuses peuvent dépasser la limite d'upload du serveur — préférez alors une URL.
+            </p>
+            <button class="save-btn" onclick="saveSetting('branding')"><i class="fas fa-save" style="margin-right:7px"></i>Enregistrer l'apparence</button>
+          </div>
+
           <div class="settings-card">
             <h3><i class="fas fa-percent"></i> Commission plateforme</h3>
             <div class="form-group">
@@ -529,7 +571,7 @@
 
 <!-- ORDER DETAIL MODAL -->
 <div class="modal-backdrop" id="order-modal">
-  <div class="modal">
+  <div class="modal" style="max-width:720px">
     <h2><i class="fas fa-shopping-basket" style="color:var(--green);margin-right:8px"></i>Détail commande</h2>
     <div id="order-modal-body"></div>
     <div class="modal-actions">
@@ -800,6 +842,24 @@
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('cow-modal')">Annuler</button>
       <button class="btn btn-primary" onclick="saveCow()"><i class="fas fa-check"></i> Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT OF WEEK — HISTORY MODAL -->
+<div class="modal-backdrop" id="cow-history-modal">
+  <div class="modal" style="max-width:740px">
+    <h2><i class="fas fa-history" style="color:var(--text-muted);margin-right:8px"></i>Historique — Client de la semaine</h2>
+    <div class="table-wrap" style="max-height:60vh;overflow-y:auto">
+      <table>
+        <thead><tr>
+          <th>Semaine</th><th>Client</th><th>Pack attribué</th><th>Note</th><th>Statut</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="cow-history-table"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('cow-history-modal')">Fermer</button>
     </div>
   </div>
 </div>

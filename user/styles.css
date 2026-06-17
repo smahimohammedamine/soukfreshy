@@ -29,7 +29,7 @@ body {
 
 /* ─── Page transition ───────────────────────── */
 .page {
-  animation: pgIn 0.38s ease both;
+  animation: pgIn 0.2s ease both;
 }
 @keyframes pgIn {
   from { opacity: 0; }

@@ -2,6 +2,7 @@
    STATE
 ═══════════════════════════════════════════ */
 let settings     = { commission:10, delivery:200, freeDelivery:5000, service:50, serviceMode:'fixed' };
+let branding     = { logo:'images/logo 1.jpeg', welcomeType:'video', welcomeUrl:'videos/soukfrechy.mp4' };
 let orders       = [];
 let products     = [];
 let notifications= [];
@@ -34,6 +35,7 @@ const API = {
   users:         '../api/admin/users.php',
   notifications: '../api/admin/notifications.php',
   settings:      '../api/admin/settings.php',
+  uploadMedia:   '../api/admin/upload-media.php',
   admins:        '../api/admin/admins.php',
   categories:    '../api/admin/categories.php',
   weeklyBoxes:   '../api/admin/weekly-boxes.php',
@@ -75,6 +77,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); })
 async function doLogout() {
   await apiFetch(API.logout, { method: 'POST' });
   orders = []; products = []; notifications = []; topCustomers = []; farmers = [];
+  localStorage.removeItem('admin_section');
   document.getElementById('app').style.display          = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-user').value = '';
@@ -85,12 +88,22 @@ async function doLogout() {
 (async function checkSession() {
   const res = await apiFetch(API.session);
   if (res.success) {
+    updateAdminName(res.username);
+    restoreSavedSection();
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display          = 'flex';
-    updateAdminName(res.username);
     await initApp();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
   }
 })();
+
+function restoreSavedSection() {
+  const saved = localStorage.getItem('admin_section');
+  if (!saved || !document.getElementById('sec-' + saved)) return;
+  const navItem = document.querySelector(`.nav-item[onclick*="showSection('${saved}'"]`);
+  showSection(saved, navItem);
+}
 
 function updateAdminName(name) {
   document.querySelectorAll('.topbar-admin-name, .sidebar-user-info p')
@@ -133,6 +146,14 @@ async function initApp() {
     document.getElementById('set-free-delivery').value = settings.freeDelivery;
     document.getElementById('set-service').value       = settings.service;
     document.getElementById('set-service-mode').value  = settings.serviceMode;
+
+    /* Branding (logo + welcome media) */
+    branding.logo         = s.site_logo          || 'images/logo 1.jpeg';
+    branding.welcomeType  = s.welcome_media_type || 'video';
+    branding.welcomeUrl   = s.welcome_media_url  || 'videos/soukfrechy.mp4';
+    document.getElementById('set-logo-preview').src   = adminAsset(branding.logo);
+    document.getElementById('set-welcome-type').value = branding.welcomeType;
+    renderWelcomePreview();
   }
 
   /* Dashboard stats */
@@ -199,9 +220,9 @@ async function initApp() {
   /* Client of the week */
   if (cowRes.success) {
     cowHistory = cowRes.history;
-    renderCowHistory();
   }
   loadCowCurrent();
+  loadCowRanking();
 
   /* Notifications */
   if (notifsRes.success) {
@@ -246,6 +267,7 @@ function showSection(name, el) {
   document.getElementById('sec-' + name).classList.add('active');
   if (el) el.classList.add('active');
   document.getElementById('page-title').textContent = sectionTitles[name] || name;
+  localStorage.setItem('admin_section', name);
   if (name === 'notifications') markAllRead();
 }
 
@@ -309,7 +331,8 @@ function renderDashOrders() {
   const tbody = document.getElementById('dash-orders-table');
   tbody.innerHTML = orders.slice(0, 5).map(o => `<tr>
     <td style="font-weight:800;color:var(--green-dark)">${o.order_number || o.id}</td>
-    <td>${o.farmer || ''}</td>
+    <td>${o.consumer_name || ''}<br><span style="font-size:.73rem;color:var(--text-muted)">${o.consumer_phone || ''}</span></td>
+    <td style="font-size:.82rem;color:var(--purple)">${o.farmers || '<span style="color:var(--text-muted);font-style:italic">—</span>'}</td>
     <td>${o.wilaya || ''}</td>
     <td>${o.products || ''}</td>
     <td style="font-weight:700">${formatDA(o.subtotal)}</td>
@@ -345,13 +368,21 @@ function renderOrdersTable(list) {
   const comm  = settings.commission / 100;
   tbody.innerHTML = list.map(o => `<tr>
     <td style="font-weight:800;color:var(--green-dark)">${o.order_number || o.id}</td>
-    <td>${o.farmer || ''}</td>
+    <td>
+      <strong>${o.consumer_name || '—'}</strong>
+      ${o.consumer_phone ? `<br><span style="font-size:.73rem;color:var(--text-muted)">${o.consumer_phone}</span>` : ''}
+    </td>
+    <td style="font-size:.82rem">
+      ${o.farmers
+        ? o.farmers.split(' / ').map(f => `<span style="display:block;color:var(--purple);font-weight:600">${f}</span>`).join('')
+        : '<span style="color:var(--text-muted);font-style:italic;font-size:.78rem">Non attribué</span>'}
+    </td>
     <td>${o.wilaya || ''}<br><span style="font-size:.73rem;color:var(--text-muted)">${o.commune || ''}</span></td>
-    <td style="max-width:160px">${o.products || ''}<br><span style="font-size:.73rem;color:var(--text-muted)">${o.qty || ''}</span></td>
+    <td style="max-width:150px;font-size:.82rem">${o.products || ''}<br><span style="font-size:.73rem;color:var(--text-muted)">${o.qty || ''}</span></td>
     <td style="font-weight:700">${formatDA(o.subtotal)}</td>
     <td style="color:var(--accent-dark);font-weight:700">${formatDA(Math.round(o.subtotal * comm))}</td>
     <td>${statusBadge(o.status)}</td>
-    <td style="color:var(--text-muted);font-size:.8rem">${o.date || ''}</td>
+    <td style="color:var(--text-muted);font-size:.8rem;white-space:nowrap">${o.date || ''}</td>
     <td>
       <button class="btn btn-outline btn-sm btn-icon" onclick="viewOrder(${o.id})" title="Voir détail"><i class="fas fa-eye"></i></button>
       <button class="btn btn-outline btn-sm btn-icon" style="margin-left:4px" onclick="advanceOrderId(${o.id})" title="Avancer statut" ${o.status === 'delivered' ? 'disabled' : ''}><i class="fas fa-arrow-right"></i></button>
@@ -361,12 +392,31 @@ function renderOrdersTable(list) {
     `${list.length} commande${list.length > 1 ? 's' : ''}`;
 }
 
+async function refreshOrders() {
+  const btn = document.getElementById('orders-refresh-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Actualisation…'; }
+  const res = await apiFetch(API.orders);
+  if (res.success) {
+    orders = res.orders;
+    renderOrdersTable(orders);
+    renderDashOrders();
+    populateWilayaFilter();
+    updateBadges();
+    const cic = document.getElementById('comm-invoiced-count');
+    if (cic) cic.textContent = orders.length;
+    showToast('Commandes actualisées');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rotate-right"></i> Actualiser'; }
+}
+
 function filterOrders() {
   const q      = document.querySelector('#sec-orders .search-input').value.toLowerCase();
   const status = document.getElementById('order-status-filter').value;
   const wilaya = document.getElementById('order-wilaya-filter').value;
   renderOrdersTable(orders.filter(o => {
-    const matchQ = !q || (o.farmer||'').toLowerCase().includes(q)
+    const matchQ = !q || (o.consumer_name||'').toLowerCase().includes(q)
+                       || (o.consumer_phone||'').toLowerCase().includes(q)
+                       || (o.farmers||'').toLowerCase().includes(q)
                        || (o.wilaya||'').toLowerCase().includes(q)
                        || (o.order_number||String(o.id)).toLowerCase().includes(q);
     return matchQ && (!status || o.status === status) && (!wilaya || o.wilaya === wilaya);
@@ -383,31 +433,111 @@ function populateWilayaFilter() {
   });
 }
 
-function viewOrder(id) {
-  const o = orders.find(x => x.id == id);
-  if (!o) return;
+async function viewOrder(id) {
   currentOrderId = id;
-  const comm  = Math.round(o.subtotal * (settings.commission / 100));
-  const total = parseFloat(o.subtotal) + parseFloat(o.delivery || 0) + parseFloat(o.service || 0);
+  document.getElementById('order-modal-body').innerHTML =
+    '<div style="text-align:center;padding:36px"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem;color:var(--green)"></i></div>';
+  document.getElementById('order-modal-next').disabled = true;
+  openModal('order-modal');
+
+  let res;
+  try {
+    res = await apiFetch(API.orders + '?id=' + id);
+  } catch {
+    document.getElementById('order-modal-body').innerHTML =
+      '<p style="color:var(--red);text-align:center">Erreur réseau.</p>';
+    return;
+  }
+  if (!res.success) {
+    document.getElementById('order-modal-body').innerHTML =
+      '<p style="color:var(--red);text-align:center">Commande introuvable.</p>';
+    return;
+  }
+
+  const o = res.order;
+
+  /* ── Items table ── */
+  const itemsHTML = o.items && o.items.length
+    ? `<div style="overflow-x:auto;margin-top:6px">
+        <table style="width:100%;border-collapse:collapse;font-size:.83rem">
+          <thead>
+            <tr style="background:var(--bg-card)">
+              <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border)">Produit</th>
+              <th style="text-align:left;padding:7px 10px;border-bottom:2px solid var(--border)">Agriculteur</th>
+              <th style="text-align:center;padding:7px 10px;border-bottom:2px solid var(--border)">Qté</th>
+              <th style="text-align:right;padding:7px 10px;border-bottom:2px solid var(--border)">Prix unit.</th>
+              <th style="text-align:right;padding:7px 10px;border-bottom:2px solid var(--border)">Total ligne</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${o.items.map(item => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:8px 10px;font-weight:600">${item.product_name}</td>
+                <td style="padding:8px 10px;color:var(--text-muted)">
+                  ${item.farmer_name
+                    ? `<strong style="color:var(--purple)">${item.farmer_name}</strong><br>
+                       <span style="font-size:.75rem"><i class="fas fa-map-marker-alt" style="margin-right:3px"></i>${item.farmer_wilaya || ''}${item.farmer_commune ? ', ' + item.farmer_commune : ''}</span>`
+                    : '—'}
+                </td>
+                <td style="padding:8px 10px;text-align:center">${item.qty} ${item.pricing_label}</td>
+                <td style="padding:8px 10px;text-align:right">${formatDA(item.unit_price)}</td>
+                <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--green-dark)">${formatDA(item.line_total)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`
+    : '<p style="color:var(--text-muted);font-size:.85rem">Aucun article trouvé.</p>';
+
+  /* ── Farmers cards ── */
+  const farmersHTML = o.farmers && o.farmers.length
+    ? o.farmers.map(f => `
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg-card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--purple)">
+          <div style="width:38px;height:38px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:.95rem;flex-shrink:0">
+            ${(f.name || '?').charAt(0).toUpperCase()}
+          </div>
+          <div style="flex:1">
+            <p style="font-weight:700;font-size:.9rem;margin-bottom:2px">${f.name || '—'}</p>
+            <p style="font-size:.78rem;color:var(--text-muted)">
+              <i class="fas fa-phone" style="width:14px"></i> ${f.phone || '—'}
+              &nbsp;·&nbsp;
+              <i class="fas fa-map-marker-alt" style="width:14px"></i> ${f.wilaya || '—'}${f.commune ? ', ' + f.commune : ''}
+            </p>
+          </div>
+        </div>`).join('')
+    : '<p style="color:var(--text-muted);font-size:.85rem">Pas d\'agriculteur lié à cette commande.</p>';
+
+  const sectionLabel = (icon, color, label) =>
+    `<p style="font-size:.72rem;font-weight:800;color:${color};text-transform:uppercase;letter-spacing:.05em;margin:16px 0 8px"><i class="fas fa-${icon}" style="margin-right:5px"></i>${label}</p>`;
+
   document.getElementById('order-modal-body').innerHTML = `
-    <div class="order-detail-row"><span>ID commande</span><strong>${o.order_number || o.id}</strong></div>
-    <div class="order-detail-row"><span>Client</span><strong>${o.farmer || ''}</strong></div>
-    <div class="order-detail-row"><span>Wilaya / Commune</span><strong>${o.wilaya || ''} / ${o.commune || ''}</strong></div>
-    <div class="order-detail-row"><span>Produits</span><strong>${o.products || ''}</strong></div>
-    <div class="order-detail-row"><span>Quantité</span><strong>${o.qty || ''}</strong></div>
+    ${sectionLabel('user', 'var(--teal)', 'Client')}
+    <div class="order-detail-row"><span>Nom</span><strong>${o.consumer_name || '—'}</strong></div>
+    <div class="order-detail-row"><span>Téléphone</span><strong>${o.consumer_phone || '—'}</strong></div>
+    ${o.consumer_email ? `<div class="order-detail-row"><span>Email</span><strong>${o.consumer_email}</strong></div>` : ''}
+    <div class="order-detail-row"><span>Wilaya / Commune</span><strong>${o.wilaya || '—'} / ${o.commune || '—'}</strong></div>
+    ${o.delivery_address ? `<div class="order-detail-row"><span>Adresse livraison</span><strong style="font-size:.82rem">${o.delivery_address}</strong></div>` : ''}
+
+    ${sectionLabel('tractor', 'var(--purple)', 'Agriculteur(s)')}
+    ${farmersHTML}
+
+    ${sectionLabel('shopping-basket', 'var(--green-dark)', 'Articles commandés')}
+    ${itemsHTML}
+
+    ${sectionLabel('receipt', 'var(--accent-dark)', 'Récapitulatif financier')}
     <div class="order-detail-row"><span>Sous-total produits</span><strong>${formatDA(o.subtotal)}</strong></div>
-    <div class="order-detail-row"><span>Commission (${settings.commission}%)</span><strong style="color:var(--accent-dark)">${formatDA(comm)}</strong></div>
-    <div class="order-detail-row"><span>Frais de livraison</span><strong>${parseFloat(o.delivery) === 0 ? 'Gratuit' : formatDA(o.delivery)}</strong></div>
-    <div class="order-detail-row"><span>Frais de service</span><strong>${formatDA(o.service || 0)}</strong></div>
+    <div class="order-detail-row"><span>Commission (${o.commission_rate || settings.commission}%)</span><strong style="color:var(--accent-dark)">${formatDA(o.commission_amount)}</strong></div>
+    <div class="order-detail-row"><span>Frais de livraison</span><strong>${parseFloat(o.delivery_fee) === 0 ? '<span style="color:var(--green)">Gratuit</span>' : formatDA(o.delivery_fee)}</strong></div>
+    <div class="order-detail-row"><span>Frais de service</span><strong>${formatDA(o.service_fee || 0)}</strong></div>
     <div class="order-detail-row" style="border-top:2px solid var(--green);margin-top:6px">
       <span style="font-weight:800">Total payé</span>
-      <strong style="color:var(--green-dark);font-size:1.05rem">${formatDA(total)}</strong>
+      <strong style="color:var(--green-dark);font-size:1.05rem">${formatDA(o.total)}</strong>
     </div>
+    <div class="order-detail-row"><span>N° commande</span><strong style="color:var(--green-dark)">${o.order_number || o.id}</strong></div>
     <div class="order-detail-row"><span>Statut</span>${statusBadge(o.status)}</div>
-    <div class="order-detail-row"><span>Date</span><strong>${o.date || ''}</strong></div>
+    <div class="order-detail-row"><span>Date</span><strong>${o.date || '—'}</strong></div>
   `;
+
   document.getElementById('order-modal-next').disabled = o.status === 'delivered';
-  openModal('order-modal');
 }
 
 function advanceOrder() {
@@ -655,7 +785,7 @@ function renderFarmers() {
   }
   tbody.innerHTML = farmers.map(f => `<tr style="opacity:${f.active ? 1 : 0.55}">
     <td style="font-weight:700">${f.name}</td>
-    <td>${f.wilaya}</td>
+    <td>${f.wilaya || '—'}<br><span style="font-size:.73rem;color:var(--text-muted)">${f.commune || ''}</span></td>
     <td style="text-align:center">${f.products}</td>
     <td><span class="badge ${f.active ? 'badge-active' : 'badge-cancelled'}">${f.active ? 'Actif' : 'Inactif'}</span></td>
     <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -931,7 +1061,7 @@ function renderCommissions() {
     const total = parseFloat(o.subtotal) + parseFloat(o.delivery || 0) + parseFloat(o.service || 0);
     return `<tr>
       <td style="font-weight:800;color:var(--green-dark)">${o.order_number || o.id}</td>
-      <td>${o.farmer || ''}</td>
+      <td>${o.consumer_name || ''}</td>
       <td>${formatDA(o.subtotal)}</td>
       <td style="font-weight:700;color:var(--accent-dark)">${formatDA(c)}</td>
       <td>${parseFloat(o.delivery) === 0 ? '<span style="color:var(--green);font-weight:700">Gratuit</span>' : formatDA(o.delivery)}</td>
@@ -990,6 +1120,8 @@ async function saveSetting(type) {
       admin_username: document.getElementById('set-admin-user').value,
       admin_password: document.getElementById('set-admin-pass').value,
     };
+  } else if (type === 'branding') {
+    return saveBranding();
   }
 
   const res = await apiFetch(API.settings, {
@@ -1005,6 +1137,107 @@ async function saveSetting(type) {
     security:   'Paramètres de sécurité enregistrés',
   };
   showToast(res.success ? (messages[type] || 'Enregistré') : (res.message || 'Erreur'));
+}
+
+/* ── Branding helpers (logo + welcome media) ── */
+
+// Resolve a stored (root-relative) asset path to one usable inside /admin/
+function adminAsset(p) {
+  if (!p) return '';
+  return /^(https?:)?\/\//.test(p) || p.startsWith('data:') ? p : '../' + p;
+}
+
+function previewLogo(url) {
+  const img = document.getElementById('set-logo-preview');
+  if (img && url.trim()) img.src = url.trim();
+}
+
+function onLogoFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  document.getElementById('set-logo-url').value = '';   // file wins over URL
+  const r = new FileReader();
+  r.onload = () => { document.getElementById('set-logo-preview').src = r.result; };
+  r.readAsDataURL(file);
+}
+
+function onWelcomeFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  document.getElementById('set-welcome-url').value = '';  // file wins over URL
+  // Auto-detect type from the chosen file
+  document.getElementById('set-welcome-type').value = file.type.startsWith('video') ? 'video' : 'image';
+  const r = new FileReader();
+  r.onload = () => renderWelcomePreview(r.result);
+  r.readAsDataURL(file);
+}
+
+function renderWelcomePreview(localSrc) {
+  const box  = document.getElementById('set-welcome-preview');
+  if (!box) return;
+  const type = document.getElementById('set-welcome-type').value;
+  const url  = (document.getElementById('set-welcome-url').value || '').trim();
+  const src  = localSrc || (url ? url : adminAsset(branding.welcomeUrl));
+  if (!src) { box.innerHTML = ''; return; }
+  box.innerHTML = type === 'image'
+    ? `<img src="${src}" alt="aperçu" style="width:100%;display:block">`
+    : `<video src="${src}" muted autoplay loop playsinline style="width:100%;display:block"></video>`;
+}
+
+async function uploadBrandingFile(inputId, target) {
+  const input = document.getElementById(inputId);
+  const file  = input.files && input.files[0];
+  if (!file) return null;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('target', target);
+  const res = await apiFetch(API.uploadMedia, { method: 'POST', body: fd });
+  if (!res.success) throw new Error(res.message || 'Échec de l\'upload');
+  return res.url;
+}
+
+async function saveBranding() {
+  const payload = {};
+  try {
+    // Logo: uploaded file wins, else URL field if provided
+    const logoUrl = await uploadBrandingFile('set-logo-file', 'logo');
+    if (logoUrl) payload.site_logo = logoUrl;
+    else {
+      const u = document.getElementById('set-logo-url').value.trim();
+      if (u) payload.site_logo = u;
+    }
+
+    // Welcome media
+    payload.welcome_media_type = document.getElementById('set-welcome-type').value;
+    const welcomeUrl = await uploadBrandingFile('set-welcome-file', 'welcome');
+    if (welcomeUrl) payload.welcome_media_url = welcomeUrl;
+    else {
+      const u = document.getElementById('set-welcome-url').value.trim();
+      if (u) payload.welcome_media_url = u;
+    }
+  } catch (e) {
+    showToast(e.message || 'Erreur lors de l\'upload');
+    return;
+  }
+
+  const res = await apiFetch(API.settings, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload),
+  });
+
+  if (res.success) {
+    if (payload.site_logo)          branding.logo        = payload.site_logo;
+    if (payload.welcome_media_url)  branding.welcomeUrl  = payload.welcome_media_url;
+    branding.welcomeType = payload.welcome_media_type;
+    document.getElementById('set-logo-preview').src = adminAsset(branding.logo);
+    document.getElementById('set-logo-file').value = '';
+    document.getElementById('set-welcome-file').value = '';
+    renderWelcomePreview();
+    showToast('Apparence du site enregistrée');
+  } else {
+    showToast(res.message || 'Erreur');
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -1522,6 +1755,69 @@ function renderCowHistory() {
   }).join('');
 }
 
+function openCowHistoryModal() {
+  renderCowHistory();
+  openModal('cow-history-modal');
+}
+
+async function loadCowRanking() {
+  const body = document.getElementById('cow-ranking-body');
+  if (!body) return;
+  try {
+    const res = await apiFetch(API.clientOfWeek + '?action=ranking');
+    if (!res.success) { body.innerHTML = '<p style="color:var(--red);padding:20px">Erreur de chargement.</p>'; return; }
+    renderCowRanking(res.ranking, res.week_start);
+  } catch {
+    body.innerHTML = '<p style="color:var(--red);padding:20px">Erreur réseau.</p>';
+  }
+}
+
+function renderCowRanking(ranking, weekStart) {
+  const body = document.getElementById('cow-ranking-body');
+  if (!body) return;
+  if (!ranking || !ranking.length) {
+    body.innerHTML = `
+      <div style="text-align:center;padding:36px;color:var(--text-muted)">
+        <i class="fas fa-trophy" style="font-size:2.2rem;color:#e0e0e0;display:block;margin-bottom:12px"></i>
+        <p>Aucune commande passée cette semaine.</p>
+      </div>`;
+    return;
+  }
+
+  const medalEmoji = ['🥇', '🥈', '🥉'];
+  const rankColors  = ['#F59E0B', '#9CA3AF', '#CD7F32'];
+
+  body.innerHTML = `
+    <div style="padding:12px 20px 4px">
+      <p style="font-size:.76rem;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">
+        Semaine du ${formatWeekStart(weekStart)}
+      </p>
+    </div>
+    ${ranking.map((c, i) => `
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border);${i === 0 ? 'background:linear-gradient(90deg,#fffbeb,transparent)' : ''}">
+        <div style="width:32px;text-align:center;flex-shrink:0">
+          ${i < 3
+            ? `<span style="font-size:1.5rem;line-height:1">${medalEmoji[i]}</span>`
+            : `<span style="font-size:.95rem;font-weight:800;color:var(--text-muted)">${i + 1}</span>`}
+        </div>
+        <div style="width:38px;height:38px;border-radius:50%;background:${i < 3 ? rankColors[i] : 'var(--bg)'};display:flex;align-items:center;justify-content:center;color:${i < 3 ? '#fff' : 'var(--text-muted)'};font-weight:800;font-size:.95rem;flex-shrink:0;border:2px solid ${i < 3 ? rankColors[i] : 'var(--border)'}">
+          ${(c.name || '?').charAt(0).toUpperCase()}
+        </div>
+        <div style="flex:1;min-width:0">
+          <p style="font-weight:700;font-size:.92rem;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</p>
+          <p style="font-size:.76rem;color:var(--text-muted)">
+            ${c.phone ? `<i class="fas fa-phone" style="margin-right:3px"></i>${c.phone}` : ''}
+            ${c.wilaya ? `&nbsp;·&nbsp;<i class="fas fa-map-marker-alt" style="margin-right:3px"></i>${c.wilaya}` : ''}
+          </p>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <p style="font-weight:800;color:var(--green-dark);font-size:.95rem">${formatDA(c.total_spent)}</p>
+          <p style="font-size:.75rem;color:var(--text-muted)">${c.order_count} commande${c.order_count > 1 ? 's' : ''}</p>
+          <p style="font-size:.7rem;color:var(--text-muted)">Dernière : ${c.last_order_at}</p>
+        </div>
+      </div>`).join('')}`;
+}
+
 function openCowModal() {
   // Populate consumers
   const uSel = document.getElementById('cow-user-select');
@@ -1553,10 +1849,10 @@ async function saveCow() {
 
   if (res.success) {
     closeModal('cow-modal');
-    // Refresh current display and prepend to history
     await loadCowCurrent();
+    loadCowRanking();
     const histRes = await apiFetch(API.clientOfWeek + '?action=history');
-    if (histRes.success) { cowHistory = histRes.history; renderCowHistory(); }
+    if (histRes.success) cowHistory = histRes.history;
     showToast('Client de la semaine désigné !');
   } else {
     showToast(res.message || 'Erreur lors de l\'enregistrement.');
@@ -1571,8 +1867,9 @@ async function updateCowStatus(id, status) {
   });
   if (res.success) {
     await loadCowCurrent();
+    loadCowRanking();
     const histRes = await apiFetch(API.clientOfWeek + '?action=history');
-    if (histRes.success) { cowHistory = histRes.history; renderCowHistory(); }
+    if (histRes.success) cowHistory = histRes.history;
     showToast('Statut mis à jour.');
   } else {
     showToast('Erreur lors de la mise à jour.');

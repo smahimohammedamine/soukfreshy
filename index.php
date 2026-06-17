@@ -1,4 +1,23 @@
-<?php session_start(); ?>
+<?php
+session_start();
+
+/* ── Site branding settings (logo + welcome media), editable from admin ── */
+$siteLogo    = 'images/logo 1.jpeg';
+$welcomeType = 'video';
+$welcomeUrl  = 'videos/soukfrechy.mp4';
+try {
+    require_once __DIR__ . '/api/config/db.php';
+    $rows = getDB()->query('SELECT setting_key, setting_value FROM settings')->fetchAll();
+    $cfg  = [];
+    foreach ($rows as $r) $cfg[$r['setting_key']] = $r['setting_value'];
+    if (!empty($cfg['site_logo']))          $siteLogo    = $cfg['site_logo'];
+    if (!empty($cfg['welcome_media_type']) && in_array($cfg['welcome_media_type'], ['video','image'], true))
+                                            $welcomeType = $cfg['welcome_media_type'];
+    if (!empty($cfg['welcome_media_url']))   $welcomeUrl  = $cfg['welcome_media_url'];
+} catch (Throwable $e) { /* fall back to defaults */ }
+$logoAttr = htmlspecialchars($siteLogo, ENT_QUOTES);
+$welcomeUrlAttr = htmlspecialchars($welcomeUrl, ENT_QUOTES);
+?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -8,10 +27,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=900&q=85">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <link rel="stylesheet" href="user/styles.css">
   <link rel="stylesheet" href="user/auth.css">
   <script>
@@ -43,7 +64,7 @@
   <div class="absolute inset-0 opacity-[0.06]" style="background-image: radial-gradient(circle at 25% 50%, #fff 1px, transparent 1px), radial-gradient(circle at 75% 25%, #fff 1px, transparent 1px); background-size: 44px 44px;"></div>
   <div id="sp-logo" class="opacity-0 mb-6">
     <div class="w-24 h-24 rounded-full border-4 border-white/25 overflow-hidden" style="box-shadow: 0 0 60px rgba(39,161,99,0.45), 0 0 0 8px rgba(255,255,255,0.07);">
-      <img src="images/logo 1.jpeg" alt="SoukFreshy" class="w-full h-full object-cover">
+      <img src="<?= $logoAttr ?>" alt="SoukFreshy" class="w-full h-full object-cover">
     </div>
   </div>
   <div id="sp-title" class="opacity-0 text-center">
@@ -69,7 +90,7 @@
     <div class="flex items-center justify-between px-5 md:px-6 py-2.5">
       <button onclick="showPage('home')" class="home-brand flex items-center gap-2.5 focus-visible:outline-none">
         <div class="w-9 h-9 rounded-full overflow-hidden border-2" style="border-color:rgba(240,165,0,0.45);">
-          <img src="images/logo 1.jpeg" alt="SoukFreshy" class="w-full h-full object-cover">
+          <img src="<?= $logoAttr ?>" alt="SoukFreshy" class="w-full h-full object-cover">
         </div>
         <span class="font-display font-bold text-[1.1rem] text-white">Souk<span style="color:#f0a500;">Freshy</span></span>
       </button>
@@ -88,7 +109,7 @@
   <!-- ── HERO ── -->
   <section class="hero-wrap relative overflow-hidden" style="min-height: 100vh;">
     <div class="absolute inset-0">
-      <img src="https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=900&q=85" alt="Légumes frais" class="w-full h-full object-cover">
+      <img src="https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=900&q=85" alt="Légumes frais" class="w-full h-full object-cover" fetchpriority="high">
       <div class="absolute inset-0" style="background: linear-gradient(160deg, rgba(10,38,20,0.78) 0%, rgba(15,58,31,0.52) 45%, rgba(10,38,20,0.93) 100%);"></div>
       <div class="noise-overlay"></div>
     </div>
@@ -120,14 +141,19 @@
     <div class="px-5 md:px-10 lg:px-14">
       <div class="grid grid-cols-1 md:grid-cols-[1.05fr_0.95fr] gap-5 md:gap-7 items-stretch">
         <div class="welcome-el rounded-[18px] overflow-hidden relative h-[270px] md:h-[355px]" style="box-shadow:0 10px 30px rgba(0,0,0,0.13);">
-          <video id="welcome-video" class="w-full h-full object-cover" autoplay muted playsinline preload="auto">
-            <source src="videos/soukfrechy.mp4" type="video/mp4">
+          <?php if ($welcomeType === 'image'): ?>
+          <img src="<?= $welcomeUrlAttr ?>" alt="Bienvenue sur SoukFreshy" class="w-full h-full object-cover">
+          <div class="absolute inset-0" style="background:linear-gradient(to top, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.08) 38%, transparent 70%);"></div>
+          <?php else: ?>
+          <video id="welcome-video" class="w-full h-full object-cover" autoplay muted playsinline loop preload="auto">
+            <source src="<?= $welcomeUrlAttr ?>">
           </video>
           <div class="absolute inset-0" style="background:linear-gradient(to top, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0.08) 38%, transparent 70%);"></div>
           <!-- Play / Pause button -->
           <button id="welcome-video-btn" onclick="toggleWelcomeVideo()" class="absolute bottom-4 right-4 z-10 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95" style="background:rgba(0,0,0,0.45); border:1.5px solid rgba(255,255,255,0.35); backdrop-filter:blur(6px); color:#fff;">
             <i id="welcome-video-icon" class="fas fa-pause text-[11px]"></i>
           </button>
+          <?php endif; ?>
         </div>
 
         <article class="welcome-el rounded-[10px] text-white p-7 md:p-9 min-h-[270px] md:min-h-[355px] flex flex-col justify-center" style="background:linear-gradient(145deg, #0f3a1f 0%, #1e6b3c 100%); box-shadow:0 10px 30px rgba(30,107,60,0.32);">
@@ -236,7 +262,7 @@
         <!-- Vegetables card -->
         <div class="sec-block group relative rounded-[20px] overflow-hidden cursor-pointer" onclick="goShop('vegetables')" style="box-shadow:0 14px 34px rgba(30,107,60,0.18), 0 4px 14px rgba(15,58,31,0.12);">
           <div class="relative h-56 md:h-60 overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?w=900&q=80" alt="Légumes" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+            <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?w=900&q=80" alt="Légumes" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy">
             <div class="absolute inset-0" style="background:linear-gradient(120deg, rgba(10,38,20,0.92) 0%, rgba(10,38,20,0.55) 52%, rgba(10,38,20,0.18) 100%);"></div>
             <div class="absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-body font-bold uppercase tracking-widest" style="background:rgba(240,165,0,0.2); color:#f0c15f; border:1px solid rgba(240,165,0,0.3);">Catégorie</div>
             <div class="absolute inset-0 flex flex-col justify-end p-6">
@@ -251,7 +277,7 @@
         <!-- Fruits card -->
         <div class="sec-block group relative rounded-[20px] overflow-hidden cursor-pointer" onclick="goShop('fruits')" style="box-shadow:0 14px 34px rgba(240,165,0,0.16), 0 4px 14px rgba(60,30,5,0.12);">
           <div class="relative h-56 md:h-60 overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=900&q=80" alt="Fruits" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+            <img src="https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=900&q=80" alt="Fruits" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy">
             <div class="absolute inset-0" style="background:linear-gradient(120deg, rgba(60,30,5,0.9) 0%, rgba(60,30,5,0.52) 52%, rgba(60,30,5,0.16) 100%);"></div>
             <div class="absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-body font-bold uppercase tracking-widest" style="background:rgba(240,165,0,0.2); color:#f0c15f; border:1px solid rgba(240,165,0,0.3);">Catégorie</div>
             <div class="absolute inset-0 flex flex-col justify-end p-6">
@@ -266,7 +292,7 @@
         <!-- Packs card -->
         <div class="sec-block group relative rounded-[20px] overflow-hidden cursor-pointer" onclick="goShop('packs')" style="box-shadow:0 14px 34px rgba(194,122,0,0.22), 0 4px 14px rgba(100,60,0,0.14);">
           <div class="relative h-56 md:h-60 overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1506617564039-2f3b650b7010?w=900&q=80" alt="Packs" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+            <img src="https://images.unsplash.com/photo-1506617564039-2f3b650b7010?w=900&q=80" alt="Packs" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy">
             <div class="absolute inset-0" style="background:linear-gradient(120deg, rgba(80,40,0,0.92) 0%, rgba(80,40,0,0.55) 52%, rgba(80,40,0,0.18) 100%);"></div>
             <div class="absolute top-4 left-4 px-3 py-1 rounded-full text-[10px] font-body font-bold uppercase tracking-widest" style="background:rgba(240,165,0,0.22); color:#f0c15f; border:1px solid rgba(240,165,0,0.35);">Offre spéciale</div>
             <div class="absolute inset-0 flex flex-col justify-end p-6">
@@ -350,66 +376,6 @@
     </div>
   </section>
 
-  <!-- BOX DETAIL MODAL (weekly + season) -->
-  <div id="box-detail-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center p-4 hidden" style="background:rgba(10,30,15,0.6)" onclick="if(event.target===this)closeBoxDetail()">
-    <div class="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl" style="background:#fff;max-height:92vh;display:flex;flex-direction:column">
-      <div id="box-detail-img-wrap" style="flex-shrink:0;height:200px;overflow:hidden;background:#f5f1eb;position:relative">
-        <img id="box-detail-img" src="" alt="" class="w-full h-full object-cover">
-        <div id="box-detail-img-fallback" class="absolute inset-0 hidden items-center justify-center text-5xl"><i class="fas fa-box" style="color:#c27a00;opacity:.6"></i></div>
-        <!-- badges row -->
-        <div class="absolute top-3 left-3 flex gap-2">
-          <div id="box-detail-type-badge" class="text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(255,255,255,0.88);box-shadow:0 1px 6px rgba(0,0,0,.15)"></div>
-          <div id="box-detail-discount-badge" class="hidden text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:#e53e3e;color:#fff"></div>
-          <div id="box-detail-season-badge" class="hidden text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(103,60,180,0.85);color:#fff"></div>
-        </div>
-        <button onclick="closeBoxDetail()" class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm" style="background:rgba(0,0,0,.35);color:#fff">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="px-5 pt-4 pb-5 overflow-y-auto flex-1" style="background:#fff">
-        <!-- badge text -->
-        <div id="box-detail-badge-row" class="hidden mb-2">
-          <span id="box-detail-badge-text" class="inline-block text-xs font-body font-bold px-3 py-1 rounded-full" style="background:#fff3d6;color:#c27a00"></span>
-        </div>
-        <h3 id="box-detail-title" class="font-display font-bold text-xl mb-1" style="color:#1a3320"></h3>
-        <p id="box-detail-desc" class="font-body text-sm mb-3" style="color:#6b7a72"></p>
-
-        <!-- Season countdown (only for season boxes) -->
-        <div id="box-detail-countdown-row" class="hidden mb-3 px-3 py-2 rounded-xl font-body text-xs font-semibold" style="background:#f0faf4;color:#1e6b3c;border:1px solid #d4f0e4">
-          <i class="fas fa-clock mr-1"></i>
-          <span id="box-detail-countdown"></span>
-        </div>
-
-        <div class="mb-4">
-          <p class="font-body text-xs font-semibold uppercase tracking-widest mb-2" style="color:#a08060">Produits inclus</p>
-          <ul id="box-detail-products" class="space-y-1.5"></ul>
-        </div>
-        <div class="flex items-center justify-between pt-3 mb-4" style="border-top:1px solid #eee">
-          <div>
-            <p class="font-body text-xs" style="color:#a08060">Prix</p>
-            <div class="flex items-baseline gap-2">
-              <p id="box-detail-price" class="font-display font-bold text-2xl" style="color:#1e6b3c"></p>
-              <p id="box-detail-original-price" class="hidden font-body text-sm line-through" style="color:#a08060"></p>
-            </div>
-            <p id="box-detail-free-delivery" class="font-body text-xs font-bold hidden" style="color:#0d9488;margin-top:3px"><i class="fas fa-truck mr-1"></i>Livraison gratuite</p>
-          </div>
-          <div class="text-right">
-            <p class="font-body text-xs" style="color:#a08060">Disponibilité</p>
-            <p id="box-detail-qty" class="font-body text-sm font-bold"></p>
-            <p id="box-detail-orders-count" class="font-body text-xs" style="color:#a08060;margin-top:2px"></p>
-          </div>
-        </div>
-
-        <button id="box-cart-btn" onclick="addBoxToCart()"
-          class="w-full py-3 rounded-xl font-body font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all duration-150 active:scale-95"
-          style="background:linear-gradient(135deg,#1e6b3c,#27a163);box-shadow:0 6px 20px rgba(30,107,60,0.3);">
-          <i class="fas fa-shopping-cart text-sm"></i>
-          <span id="box-cart-btn-label">Ajouter au panier</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- ── FOOTER + CONTACT ── -->
   <footer id="footer-section" class="footer-wrap min-h-screen px-6 md:px-8 py-12 md:py-14 flex items-center">
     <div class="max-w-[1120px] mx-auto w-full">
@@ -417,7 +383,7 @@
         <div class="footer-col">
           <div class="flex items-center gap-2.5 mb-4">
             <div class="w-10 h-10 rounded-full overflow-hidden border" style="border-color:#d8e5dd;">
-              <img src="images/logo 1.jpeg" alt="SoukFreshy" class="w-full h-full object-cover">
+              <img src="<?= $logoAttr ?>" alt="SoukFreshy" class="w-full h-full object-cover">
             </div>
             <span class="font-display font-bold text-[#101828] text-[1.4rem]">Souk<span style="color:#1e6b3c;">Freshy</span></span>
           </div>
@@ -479,6 +445,60 @@
   </footer>
 </div>
 
+<!-- BOX DETAIL MODAL (weekly + season) — outside all pages so it works from any page -->
+<div id="box-detail-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center p-4 hidden" style="background:rgba(10,30,15,0.6)" onclick="if(event.target===this)closeBoxDetail()">
+  <div class="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl" style="background:#fff;max-height:92vh;display:flex;flex-direction:column">
+    <div id="box-detail-img-wrap" style="flex-shrink:0;height:200px;overflow:hidden;background:#f5f1eb;position:relative">
+      <img id="box-detail-img" src="" alt="" class="w-full h-full object-cover">
+      <div id="box-detail-img-fallback" class="absolute inset-0 hidden items-center justify-center text-5xl"><i class="fas fa-box" style="color:#c27a00;opacity:.6"></i></div>
+      <div class="absolute top-3 left-3 flex gap-2">
+        <div id="box-detail-type-badge" class="text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(255,255,255,0.88);box-shadow:0 1px 6px rgba(0,0,0,.15)"></div>
+        <div id="box-detail-discount-badge" class="hidden text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:#e53e3e;color:#fff"></div>
+        <div id="box-detail-season-badge" class="hidden text-xs font-body font-bold px-2.5 py-1 rounded-full" style="background:rgba(103,60,180,0.85);color:#fff"></div>
+      </div>
+      <button onclick="closeBoxDetail()" class="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-sm" style="background:rgba(0,0,0,.35);color:#fff">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="px-5 pt-4 pb-5 overflow-y-auto flex-1" style="background:#fff">
+      <div id="box-detail-badge-row" class="hidden mb-2">
+        <span id="box-detail-badge-text" class="inline-block text-xs font-body font-bold px-3 py-1 rounded-full" style="background:#fff3d6;color:#c27a00"></span>
+      </div>
+      <h3 id="box-detail-title" class="font-display font-bold text-xl mb-1" style="color:#1a3320"></h3>
+      <p id="box-detail-desc" class="font-body text-sm mb-3" style="color:#6b7a72"></p>
+      <div id="box-detail-countdown-row" class="hidden mb-3 px-3 py-2 rounded-xl font-body text-xs font-semibold" style="background:#f0faf4;color:#1e6b3c;border:1px solid #d4f0e4">
+        <i class="fas fa-clock mr-1"></i>
+        <span id="box-detail-countdown"></span>
+      </div>
+      <div class="mb-4">
+        <p class="font-body text-xs font-semibold uppercase tracking-widest mb-2" style="color:#a08060">Produits inclus</p>
+        <ul id="box-detail-products" class="space-y-1.5"></ul>
+      </div>
+      <div class="flex items-center justify-between pt-3 mb-4" style="border-top:1px solid #eee">
+        <div>
+          <p class="font-body text-xs" style="color:#a08060">Prix</p>
+          <div class="flex items-baseline gap-2">
+            <p id="box-detail-price" class="font-display font-bold text-2xl" style="color:#1e6b3c"></p>
+            <p id="box-detail-original-price" class="hidden font-body text-sm line-through" style="color:#a08060"></p>
+          </div>
+          <p id="box-detail-free-delivery" class="font-body text-xs font-bold hidden" style="color:#0d9488;margin-top:3px"><i class="fas fa-truck mr-1"></i>Livraison gratuite</p>
+        </div>
+        <div class="text-right">
+          <p class="font-body text-xs" style="color:#a08060">Disponibilité</p>
+          <p id="box-detail-qty" class="font-body text-sm font-bold"></p>
+          <p id="box-detail-orders-count" class="font-body text-xs" style="color:#a08060;margin-top:2px"></p>
+        </div>
+      </div>
+      <button id="box-cart-btn" onclick="addBoxToCart()"
+        class="w-full py-3 rounded-xl font-body font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all duration-150 active:scale-95"
+        style="background:linear-gradient(135deg,#1e6b3c,#27a163);box-shadow:0 6px 20px rgba(30,107,60,0.3);">
+        <i class="fas fa-shopping-cart text-sm"></i>
+        <span id="box-cart-btn-label">Ajouter au panier</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════════════════
      SHOP PAGE
 ══════════════════════════════════════════════════════════ -->
@@ -490,7 +510,7 @@
       <button onclick="showPage('home')" class="flex items-center gap-2.5 focus:outline-none text-white">
         <i class="fas fa-arrow-left text-sm"></i>
         <div class="w-8 h-8 rounded-full overflow-hidden border-2" style="border-color:rgba(240,165,0,0.5);">
-          <img src="images/logo 1.jpeg" alt="" class="w-full h-full object-cover">
+          <img src="<?= $logoAttr ?>" alt="" class="w-full h-full object-cover">
         </div>
         <span class="font-display font-bold text-[1rem] text-white">Boutique</span>
       </button>
@@ -763,7 +783,7 @@
     </button>
     <div class="text-center mb-5">
       <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-100 mx-auto mb-3">
-        <img src="images/logo 1.jpeg" alt="" class="w-full h-full object-cover">
+        <img src="<?= $logoAttr ?>" alt="" class="w-full h-full object-cover">
       </div>
       <h2 id="auth-modal-title" class="text-xl font-display font-bold text-gray-900">Connexion</h2>
       <p id="auth-modal-subtitle" class="text-gray-500 text-xs font-body mt-1">Connectez-vous pour continuer</p>
@@ -929,8 +949,11 @@ window.__SF_SESSION = <?php
     );
 ?>;
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
 <script src="user/script.js"></script>
 <script src="user/auth.js"></script>
+<script src="user/i18n.js"></script>
 <script>
   function openVideoModal() {
     const modal = document.getElementById('video-modal');

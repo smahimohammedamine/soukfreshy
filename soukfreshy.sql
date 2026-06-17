@@ -240,7 +240,10 @@ INSERT IGNORE INTO settings (setting_key, setting_value) VALUES
   ('delivery_fee',           '200'),    -- DA, charged when subtotal < free_delivery_minimum
   ('free_delivery_minimum',  '2000'),   -- DA, threshold for free delivery
   ('service_fee',            '50'),     -- DA per order
-  ('service_fee_mode',       'fixed');  -- 'fixed' | 'percent'
+  ('service_fee_mode',       'fixed'),  -- 'fixed' | 'percent'
+  ('site_logo',              'images/logo 1.jpeg'),    -- path/URL of site logo (editable from admin)
+  ('welcome_media_type',     'video'),                 -- 'video' | 'image' for the welcome section
+  ('welcome_media_url',      'videos/soukfrechy.mp4'); -- path/URL of welcome-section media
 
 -- ----------------------------------------------------------------
 -- 11. NOTIFICATIONS

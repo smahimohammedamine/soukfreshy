@@ -25,8 +25,13 @@ try {
     $orders = $stmt->fetchAll();
 
     $itemStmt = $db->prepare(
-        'SELECT product_name, qty, pricing_label, unit_price, line_total
-         FROM order_items WHERE order_id = :oid ORDER BY id'
+        'SELECT oi.product_name, oi.qty, oi.pricing_label, oi.unit_price, oi.line_total,
+                u.full_name  AS farmer_name,
+                u.wilaya     AS farmer_wilaya,
+                u.phone      AS farmer_phone
+         FROM order_items oi
+         LEFT JOIN users u ON u.id = oi.farmer_id
+         WHERE oi.order_id = :oid ORDER BY oi.id'
     );
 
     $result = [];

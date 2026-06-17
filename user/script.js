@@ -71,13 +71,13 @@ function initSplash() {
 
   setTimeout(() => {
     gsap.to('#splash', {
-      opacity: 0, duration: 0.5, ease: 'power2.in',
+      opacity: 0, duration: 0.4, ease: 'power2.in',
       onComplete() {
         $('splash').style.display = 'none';
         showPage('home');
       }
     });
-  }, 5000);
+  }, 4000);
 }
 
 // ─── Page navigation ──────────────────────────
@@ -107,10 +107,13 @@ function animateIntro() {
   );
 }
 
+let _heroAnimated = false;
 function animateHero() {
+  if (_heroAnimated) return;
+  _heroAnimated = true;
   gsap.fromTo('.hero-el',
-    { opacity: 0, y: 28 },
-    { opacity: 1, y: 0, duration: 0.7, stagger: 0.13, ease: 'power3.out', delay: 0.1 }
+    { opacity: 0, y: 20 },
+    { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: 'power3.out', delay: 0.05 }
   );
 }
 
@@ -1201,7 +1204,7 @@ function showCheckoutSuccess(orderNumber, total, deliveryFee) {
         <i class="fas fa-money-bill-wave text-amber-500 flex-shrink-0"></i>
         <p class="font-body text-sm text-amber-800 text-left">Paiement en espèces à la livraison (main à main)</p>
       </div>
-      <button onclick="showPage('shop')" class="w-full py-3 rounded-xl font-body font-semibold text-sm text-white" style="background:linear-gradient(135deg,#1e6b3c,#27a163); box-shadow:0 6px 18px rgba(30,107,60,0.28);">
+      <button onclick="location.reload()" class="w-full py-3 rounded-xl font-body font-semibold text-sm text-white" style="background:linear-gradient(135deg,#1e6b3c,#27a163); box-shadow:0 6px 18px rgba(30,107,60,0.28);">
         <i class="fas fa-store mr-2 text-xs"></i>Continuer mes achats
       </button>
     </div>`;
@@ -1231,15 +1234,37 @@ async function loadUserOrders() {
     container.innerHTML = data.orders.map(o => {
       const [label, bg, color] = statusMap[o.status] || ['Inconnue', '#f9fafb', '#6b7280'];
       const date = new Date(o.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-      const itemsText = o.items.map(i => `${i.product_name} ×${i.qty}`).join(', ');
+      const itemsHtml = o.items.map(i => {
+        const farmerBlock = i.farmer_name ? `
+          <div style="margin-top:6px;padding:7px 10px;background:#f0faf4;border-radius:8px;border:1px solid #c6e8d3;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-size:11px;font-weight:700;color:#1e6b3c;font-family:var(--font-body,sans-serif);">
+                <i class="fas fa-leaf" style="margin-right:3px;opacity:.7;"></i>${i.farmer_name}
+              </span>
+              ${i.farmer_wilaya ? `<span style="font-size:10px;color:#5a8a6e;font-family:var(--font-body,sans-serif);"><i class="fas fa-location-dot" style="margin-right:2px;opacity:.7;"></i>${i.farmer_wilaya}</span>` : ''}
+              ${i.farmer_phone ? `<a href="tel:${i.farmer_phone}" style="font-size:10px;color:#27a163;font-family:var(--font-body,sans-serif);text-decoration:none;"><i class="fas fa-phone" style="margin-right:2px;opacity:.7;"></i>${i.farmer_phone}</a>` : ''}
+            </div>
+          </div>` : '';
+        return `
+          <div style="padding:8px 0;border-bottom:1px dashed #f0f0f0;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <span style="font-size:12px;color:#374151;font-family:var(--font-body,sans-serif);font-weight:600;">${i.product_name}</span>
+              <span style="font-size:12px;color:#1e6b3c;font-family:var(--font-body,sans-serif);font-weight:700;white-space:nowrap;">${Number(i.line_total).toLocaleString('fr-FR')} DA</span>
+            </div>
+            <div style="font-size:11px;color:#9ca3af;font-family:var(--font-body,sans-serif);margin-top:1px;">
+              ${i.qty} ${i.pricing_label} × ${Number(i.unit_price).toLocaleString('fr-FR')} DA
+            </div>
+            ${farmerBlock}
+          </div>`;
+      }).join('');
       return `
       <div class="rounded-xl border border-gray-100 px-3 py-2.5" style="background:#fafafa;">
-        <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center justify-between mb-2">
           <span class="font-body font-bold text-sm text-gray-800">${o.order_number || '#' + o.id}</span>
           <span class="text-[11px] font-body font-semibold px-2 py-0.5 rounded-full" style="background:${bg};color:${color};">${label}</span>
         </div>
-        <p class="text-[11px] text-gray-500 font-body truncate">${itemsText}</p>
-        <div class="flex items-center justify-between mt-1.5">
+        <div style="margin-bottom:6px;">${itemsHtml}</div>
+        <div class="flex items-center justify-between mt-2">
           <span class="text-[11px] text-gray-400 font-body">${date}</span>
           <span class="text-sm font-body font-bold" style="color:#1e6b3c;">${Number(o.total).toLocaleString('fr-FR')} DA</span>
         </div>

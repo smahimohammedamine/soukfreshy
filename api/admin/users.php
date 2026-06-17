@@ -57,7 +57,8 @@ if ($method === 'GET') {
 
         $farmers = $db->query("
             SELECT u.id, u.full_name AS name,
-                   COALESCE(NULLIF(TRIM(u.wilaya), ''), '—') AS wilaya,
+                   COALESCE(NULLIF(TRIM(u.wilaya),  ''), '—') AS wilaya,
+                   COALESCE(NULLIF(TRIM(u.commune), ''), '')  AS commune,
                    COUNT(p.id) AS products, u.is_active AS active
             FROM users u
             LEFT JOIN products p ON p.farmer_id = u.id AND p.is_active = 1

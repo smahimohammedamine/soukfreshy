@@ -30,7 +30,8 @@ if ($method === 'GET') {
     $raw  = file_get_contents('php://input');
     $data = json_decode($raw, true) ?: $_POST;
 
-    $allowed = ['commission_rate','delivery_fee','free_delivery_minimum','service_fee','service_fee_mode'];
+    $allowed = ['commission_rate','delivery_fee','free_delivery_minimum','service_fee','service_fee_mode',
+                'site_logo','welcome_media_type','welcome_media_url'];
 
     try {
         $db   = getDB();
